@@ -48,8 +48,14 @@ import ChatbotWidget from './components/ChatbotWidget';
  */
 export default function App() {
   // Session credentials
-  const [token, setToken] = useState(localStorage.getItem('token') || '');
-  const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')) || null);
+  const [token, setToken] = useState(sessionStorage.getItem('token') || '');
+  const [user, setUser] = useState(JSON.parse(sessionStorage.getItem('user')) || null);
+
+  // Clear legacy localStorage to fix sticky sessions
+  useEffect(() => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  }, []);
 
   // Sign-in inputs
   const [email, setEmail] = useState('');
@@ -83,8 +89,8 @@ export default function App() {
   const handleAuthSuccess = (tokenValue, userValue) => {
     setToken(tokenValue);
     setUser(userValue);
-    localStorage.setItem('token', tokenValue);
-    localStorage.setItem('user', JSON.stringify(userValue));
+    sessionStorage.setItem('token', tokenValue);
+    sessionStorage.setItem('user', JSON.stringify(userValue));
     setConsentUser(null);
     setLoginError('');
   };
@@ -95,8 +101,8 @@ export default function App() {
     setUser(null);
     setProfileData(null);
     setAssets([]);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
   };
 
   // Login Request
