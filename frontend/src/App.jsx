@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, ShieldAlert, LogOut, LayoutDashboard, UserCheck, 
   BookOpen, History, PlusCircle, Edit, Trash2, Shield, User, HardDrive,
-  CalendarCheck, ClipboardList, CheckSquare, Settings, GraduationCap, Activity, Users, Clipboard, Trash, Key, Layers, FileText
+  CalendarCheck, ClipboardList, CheckSquare, Settings, GraduationCap, Activity, Users, Clipboard, Trash, Key, Layers, FileText, FileDigit
 } from 'lucide-react';
 import ConsentModal from './components/ConsentModal';
 import AssetForm from './components/AssetForm';
