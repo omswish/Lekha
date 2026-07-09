@@ -2,6 +2,7 @@
 
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+const { parseAndSeedExcel } = require('./excel_parser');
 
 // Initialize Prisma Client to connect with PostgreSQL database.
 const prisma = new PrismaClient();
@@ -753,7 +754,8 @@ async function main() {
     }
   });
 
-  console.log('Remaining 11 ISMS formats seeded.');
+  // Run dynamic excel worksheets parser engine to populate actual files data
+  await parseAndSeedExcel(prisma, admin, employee, manager);
 
   // 23. Initialize CERT-In audit log entry
   await prisma.auditLog.create({
