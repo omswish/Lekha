@@ -43,9 +43,10 @@ app.use(express.json());
 // Serve static assets (e.g. Help Manual PDF) from public folder
 app.use('/static', express.static('public'));
 
-// ==========================================
-// API ROUTING PATHWAYS
-// ==========================================
+// Health check route for load balancers and CI checkups
+app.get('/', (req, res) => {
+  res.status(200).json({ status: 'healthy', service: 'Compliance Asset Manager API' });
+});
 
 // Routes handling authentication (Sign-in, first-time DPDP consent validation)
 app.use('/api/auth', authRoutes);

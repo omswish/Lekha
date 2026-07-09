@@ -81,7 +81,7 @@ jobs:
           
           # 3. Wait for both servers to be fully responsive
           cd ..
-          wait-on -t 30000 http://localhost:5000 http://localhost:5173
+          wait-on -t 30000 tcp:localhost:5000 tcp:localhost:5173
           
           # 4. Run the functional UI tests in Firefox
           node scratch/firefox_functional_test.js
