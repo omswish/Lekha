@@ -20,7 +20,7 @@ Write-Host "=================================================================" -
 function Check-LastCommand {
     param($ErrorMessage)
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "❌ Error: $ErrorMessage" -ForegroundColor Red
+        Write-Host "[ERROR] Error: $ErrorMessage" -ForegroundColor Red
         Exit 1
     }
 }
@@ -64,7 +64,7 @@ switch ($Action) {
         git checkout -b $featBranch
         Check-LastCommand "Failed to create feature branch."
         
-        Write-Host "✔ Feature branch '$featBranch' successfully initialized! Start coding." -ForegroundColor Green
+        Write-Host "[OK] Feature branch '$featBranch' successfully initialized! Start coding." -ForegroundColor Green
     }
 
     "merge-feature" {
@@ -96,7 +96,7 @@ switch ($Action) {
         }
         
         # Run Integration QA Script
-        Write-Host "Running 44-point positive & negative checks..."
+        Write-Host "Running 44-point positive and negative checks..."
         node C:\Users\omkar.s\.gemini\antigravity-cli\brain\d9d2d343-a7d6-42bb-ad28-5327b71208b1\scratch\exhaustive_qa_test.js
         if ($LASTEXITCODE -ne 0) {
             Pop-Location
@@ -109,10 +109,10 @@ switch ($Action) {
         npm run db:seed
         Pop-Location
         
-        Write-Host "✔ QA checks passed! Pushing 'dev' branch to GitHub..." -ForegroundColor Green
+        Write-Host "[OK] QA checks passed! Pushing 'dev' branch to GitHub..." -ForegroundColor Green
         git push origin dev
         Check-LastCommand "Failed to push dev branch."
-        Write-Host "✔ 'dev' branch successfully updated and pushed!" -ForegroundColor Green
+        Write-Host "[OK] 'dev' branch successfully updated and pushed!" -ForegroundColor Green
     }
 
     "release-main" {
@@ -131,7 +131,7 @@ switch ($Action) {
         git push origin main
         Check-LastCommand "Failed to push main branch."
         
-        Write-Host "✔ 'main' branch successfully pushed! GitHub Actions pipeline triggered." -ForegroundColor Green
-        Write-Host "✔ Functional tests on Linux VM & Mozilla Firefox starting in CI." -ForegroundColor Green
+        Write-Host "[OK] 'main' branch successfully pushed! GitHub Actions pipeline triggered." -ForegroundColor Green
+        Write-Host "[OK] Functional tests on Linux VM and Mozilla Firefox starting in CI." -ForegroundColor Green
     }
 }
