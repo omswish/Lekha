@@ -59,30 +59,29 @@ jobs:
           npx prisma db push --accept-data-loss
           npm run db:seed
 
-      - name: Start Backend API Server
+      - name: Install Playwright & Mozilla Firefox
+        run: |
+          npm install -g wait-on
+          npm install playwright
+          npx playwright install firefox --with-deps
+
+      - name: Start Servers & Execute Functional Tests
         env:
           DATABASE_URL: postgresql://postgres:password123@localhost:5432/compliance_db
           JWT_SECRET: supersecretjwttokenforcienvironmenttesting123
           PORT: 5000
         run: |
+          # 1. Start backend server in the background
           cd backend
           npm start &
-
-      - name: Start Frontend Vite Server
-        run: |
-          cd frontend
+          
+          # 2. Start frontend Vite server in the background
+          cd ../frontend
           npm run dev -- --port 5173 --host &
-
-      - name: Wait for Services to be Operational
-        run: |
-          npm install -g wait-on
+          
+          # 3. Wait for both servers to be fully responsive
+          cd ..
           wait-on -t 30000 http://localhost:5000 http://localhost:5173
-
-      - name: Install Playwright & Mozilla Firefox
-        run: |
-          npm install playwright
-          npx playwright install firefox --with-deps
-
-      - name: Execute Full Mozilla Firefox Functional Test
-        run: |
+          
+          # 4. Run the functional UI tests in Firefox
           node scratch/firefox_functional_test.js
