@@ -1,0 +1,581 @@
+/* frontend/src/index.css */
+
+/* =========================================================================
+   1. DESIGN SYSTEM & CSS VARIABLES
+   ========================================================================= */
+:root {
+  /* Fonts */
+  --font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Color Palette (Cream & Dark Orange IBM Maximo Theme) */
+  --bg-primary: #fbfaf7;       /* Soft light cream background */
+  --bg-secondary: #ffffff;     /* Crisp white for cards, panels, and modals */
+  --bg-tertiary: #f5f2ea;      /* Slightly darker cream for input fields and hover lists */
+  
+  --color-text-primary: #1e1e1e;  /* High-contrast charcoal black for text */
+  --color-text-muted: #5e5e5e;    /* Slate gray for secondary labels */
+  --color-text-dark: #1e1e1e;     /* General dark text */
+  
+  --accent-primary: #e65f00;      /* Dark Orange accent */
+  --accent-primary-glow: rgba(230, 95, 0, 0.08);
+  --accent-success: #198754;      /* Compliant forest green */
+  --accent-warning: #fd7e14;      /* Golden orange warning */
+  --accent-danger: #dc3545;       /* Critical red */
+  
+  /* Sidebar Specific Colors (Charcoal Gray IBM Maximo Style) */
+  --sidebar-bg: #222222;          /* Solid dark charcoal sidebar */
+  --sidebar-text: #fbfaf7;        /* Cream white text for logo and names */
+  --sidebar-text-muted: #9e9e9e;  /* Muted gray text for inactive links */
+  --sidebar-text-active: #ffffff; /* Active text color */
+  --sidebar-hover-bg: #3d3d3d;    /* Active link hover */
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  
+  /* Borders and Dividers */
+  --border-color: rgba(30, 30, 30, 0.12); /* Clean dividers */
+  --border-focus: #e65f00;
+
+  /* Shadows and Effects */
+  --shadow-sm: 0 1px 3px rgba(30, 30, 30, 0.05);
+  --shadow-md: 0 4px 12px rgba(30, 30, 30, 0.06), 0 2px 4px rgba(30, 30, 30, 0.04);
+  --shadow-lg: 0 12px 24px rgba(30, 30, 30, 0.1), 0 4px 12px rgba(30, 30, 30, 0.05);
+  --glass-bg: #ffffff;            /* Avoid glassmorphism, use solid white */
+  --glass-backdrop: none;         /* No backdrop blur */
+
+  /* Layout Constants */
+  --sidebar-width: 280px;
+  --transition-speed: 0.2s;
+}
+
+
+/* =========================================================================
+   2. BASE STYLES & RESET
+   ========================================================================= */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* =========================================================================
+   3. LAYOUT STRUCTURE
+   ========================================================================= */
+
+/* The primary outer container after authentication */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar navigation */
+.sidebar {
+  width: var(--sidebar-width);
+  background-color: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  height: 100vh;
+  left: 0;
+  top: 0;
+  z-index: 10;
+}
+
+/* Main content workspace */
+.main-content {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  padding: 2.5rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+}
+
+/* =========================================================================
+   4. TYPOGRAPHY & HEADER STYLES
+   ========================================================================= */
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--sidebar-text);
+  margin-bottom: 2.5rem;
+  letter-spacing: 0.5px;
+}
+
+.sidebar-logo span {
+  background: linear-gradient(135deg, #3b82f6, var(--accent-success));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.nav-links {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--sidebar-text-muted);
+  transition: all var(--transition-speed) ease;
+  font-weight: 500;
+}
+
+.nav-item:hover, .nav-item.active {
+  color: var(--sidebar-text-active);
+  background-color: var(--sidebar-hover-bg);
+  transform: translateX(4px);
+}
+
+.nav-item.active {
+  border-left: 3px solid var(--sidebar-text-active);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.05), transparent);
+}
+
+.user-badge {
+  margin-top: auto;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: var(--sidebar-text);
+}
+
+.user-badge-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.user-badge-role {
+  font-size: 0.75rem;
+  color: #3b82f6;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* Page titles */
+.page-header {
+  margin-bottom: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.page-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.page-description {
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  margin-top: 0.25rem;
+}
+
+/* =========================================================================
+   5. PREMIUM CARD DESIGNS
+   ========================================================================= */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(29, 53, 87, 0.3);
+  box-shadow: var(--shadow-lg), 0 0 20px rgba(29, 53, 87, 0.04);
+}
+
+.card-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-metric {
+  font-size: 2.25rem;
+  font-weight: 800;
+  margin: 1rem 0;
+  background: linear-gradient(135deg, var(--color-text-primary), var(--color-text-muted));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* =========================================================================
+   6. TABLES & DATA VIEWS
+   ========================================================================= */
+.table-container {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  margin-bottom: 2rem;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.data-table th {
+  background-color: var(--bg-tertiary);
+  padding: 1rem 1.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.data-table td {
+  padding: 1rem 1.25rem;
+  font-size: 0.95rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--color-text-primary);
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tr:hover td {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* Compliance status badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-public { background-color: rgba(16, 185, 129, 0.15); color: #10b981; }
+.badge-internal { background-color: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+.badge-restricted { background-color: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.badge-confidential { background-color: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+.badge-success { background-color: rgba(16, 185, 129, 0.15); color: #10b981; }
+.badge-warning { background-color: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.badge-danger { background-color: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+/* =========================================================================
+   7. INPUTS & FORM STYLING
+   ========================================================================= */
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  color: var(--color-text-primary);
+  font-size: 0.95rem;
+  transition: all var(--transition-speed) ease;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(230, 95, 0, 0.25);
+}
+
+.form-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  cursor: pointer;
+}
+
+.form-checkbox input {
+  margin-top: 0.25rem;
+}
+
+/* =========================================================================
+   8. BUTTONS & ACTIONS
+   ========================================================================= */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition-speed) ease;
+}
+
+.btn-primary {
+  background-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background-color: #cc5200;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(230, 95, 0, 0.25);
+}
+
+.btn-secondary {
+  background-color: var(--bg-tertiary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.btn-danger {
+  background-color: var(--accent-danger);
+  color: #ffffff;
+}
+
+.btn-danger:hover {
+  background-color: #bd2130;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.25);
+}
+
+.btn-sm {
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+  border-radius: 8px;
+}
+
+/* =========================================================================
+   9. AUTHENTICATION & DIALOGS (MODALS)
+   ========================================================================= */
+.auth-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: var(--bg-primary);
+  position: relative;
+  padding: 1.5rem;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 2.5rem;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.auth-logo {
+  font-size: 1.75rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.auth-logo span {
+  background: var(--accent-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Glass Modal Overlay - Replaced with Solid dark background (no glassmorphism) */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(30, 30, 30, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1.5rem;
+}
+
+.modal-content {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 2rem;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1rem;
+}
+
+.modal-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.modal-close:hover {
+  color: var(--color-text-primary);
+}
+
+/* =========================================================================
+   10. PAGINATION, SECTIONS & ALERTS
+   ========================================================================= */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.alert {
+  padding: 1rem;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: 1px solid transparent;
+}
+
+
+.alert-danger {
+  background-color: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: #b91c1c;
+}
+
+.alert-success {
+  background-color: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: #0f5132;
+}
+
+
+.tabs {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  transition: color 0.2s ease;
+  position: relative;
+}
+
+.tab-btn:hover {
+  color: var(--color-text-primary);
+}
+
+.tab-btn.active {
+  color: var(--accent-primary);
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -0.6rem;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: var(--accent-primary);
+}

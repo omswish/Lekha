@@ -1,0 +1,25 @@
+# Dependency folders
+node_modules/
+
+# Environment files
+.env
+.env.local
+
+# Build folders
+dist/
+build/
+
+# Local databases and engines
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+query_engine-windows.dll.node
+
+# System task logs
+.system_generated/
+*.log
+.tempmediaStorage/
+*help_manual.pdf
+*user_manual.pdf
+
+# Heavy static assets and docs
+ISO_docs/
