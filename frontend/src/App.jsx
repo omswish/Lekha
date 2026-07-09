@@ -152,6 +152,11 @@ export default function App() {
         // Count unverified if next due date is overdue
         const unverified = assetsData.filter(a => a.nextVerificationDue && new Date(a.nextVerificationDue) < new Date()).length;
         setMetrics({ total, allocated, critical, unverified });
+      } else {
+        if (assetsRes.status === 401 || assetsRes.status === 403 || assetsRes.status === 404) {
+          handleLogout();
+          return;
+        }
       }
 
       // 2. Fetch active users list for dropdowns (restricted to admin/manager)
@@ -162,6 +167,11 @@ export default function App() {
         const usersData = await usersRes.json();
         if (usersRes.ok) {
           setUsersList(usersData);
+        } else {
+          if (usersRes.status === 401 || usersRes.status === 403 || usersRes.status === 404) {
+            handleLogout();
+            return;
+          }
         }
       }
     } catch (err) {
@@ -180,6 +190,10 @@ export default function App() {
       if (res.ok) {
         setProfileData(data);
         setProfileName(data.name || '');
+      } else {
+        if (res.status === 401 || res.status === 403 || res.status === 404) {
+          handleLogout();
+        }
       }
     } catch (err) {
       console.error('Error loading employee profile:', err);
