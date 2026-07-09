@@ -1,0 +1,88 @@
+name: Compliance E2E Regression Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  functional-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: compliance_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password123
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm install
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm install
+
+      - name: Initialize Prisma Schema & Seed Database
+        env:
+          DATABASE_URL: postgresql://postgres:password123@localhost:5432/compliance_db
+        run: |
+          cd backend
+          npx prisma generate
+          npx prisma db push --accept-data-loss
+          npm run db:seed
+
+      - name: Start Backend API Server
+        env:
+          DATABASE_URL: postgresql://postgres:password123@localhost:5432/compliance_db
+          JWT_SECRET: supersecretjwttokenforcienvironmenttesting123
+          PORT: 5000
+        run: |
+          cd backend
+          npm start &
+
+      - name: Start Frontend Vite Server
+        run: |
+          cd frontend
+          npm run dev -- --port 5173 --host &
+
+      - name: Wait for Services to be Operational
+        run: |
+          npm install -g wait-on
+          wait-on -t 30000 http://localhost:5000 http://localhost:5173
+
+      - name: Install Playwright & Mozilla Firefox
+        run: |
+          npm install playwright
+          npx playwright install firefox --with-deps
+
+      - name: Execute Full Mozilla Firefox Functional Test
+        run: |
+          node scratch/firefox_functional_test.js
