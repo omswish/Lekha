@@ -19,7 +19,7 @@ export default function ChatbotWidget({ token, setActiveTab }) {
     {
       id: 'welcome',
       sender: 'bot',
-      text: 'Hello! I am your compliance assistant. I can query the database or guide you around. What can I help you with today?'
+      text: 'Hello! I am Lekha, your compliance assistant. I can query the database or guide you around. What can I help you with today?'
     }
   ]);
   const [loading, setLoading] = useState(false);
@@ -145,7 +145,7 @@ export default function ChatbotWidget({ token, setActiveTab }) {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Sparkles size={18} />
-              <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>Compliance Assistant</div>
+              <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>Lekha</div>
             </div>
             <button
               onClick={() => setIsOpen(false)}

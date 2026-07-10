@@ -331,14 +331,58 @@ router.post('/message', authenticate, async (req, res) => {
     }
 
     // -----------------------------------------------------------------
+    // 11. SECURITY INCIDENT TRACKING
+    // -----------------------------------------------------------------
+    if (query.includes('incident') || query.includes('breach') || query.includes('security event')) {
+      const list = await prisma.securityIncident.findMany({
+        take: 3,
+        orderBy: { createdAt: 'desc' },
+        select: { incidentCode: true, description: true, severity: true, status: true }
+      });
+      reply = `Here are the latest security incidents logged in the system (FMT 20 compliance):`;
+      data = list;
+      return res.json({ reply, data });
+    }
+
+    // -----------------------------------------------------------------
+    // 12. NON-CONFORMANCE & CORRECTIVE ACTION (NCR/CAR)
+    // -----------------------------------------------------------------
+    if (query.includes('ncr') || query.includes('non-conformance') || query.includes('non conformance') || query.includes('corrective action')) {
+      const list = await prisma.nonConformance.findMany({
+        take: 3,
+        orderBy: { createdAt: 'desc' },
+        select: { code: true, description: true, severity: true, status: true }
+      });
+      reply = `Here are the latest Non-Conformance registers (FMT 13/14 compliance):`;
+      data = list;
+      return res.json({ reply, data });
+    }
+
+    // -----------------------------------------------------------------
+    // 13. PATCH MANAGEMENT STATUS
+    // -----------------------------------------------------------------
+    if (query.includes('patch') || query.includes('hotfix') || query.includes('vulnerability')) {
+      const list = await prisma.patchAuditLog.findMany({
+        take: 3,
+        orderBy: { auditDate: 'desc' },
+        select: { serverName: true, patchId: true, status: true, checkedBy: true }
+      });
+      reply = `Here are the latest server patch audit logs (FMT 26 compliance):`;
+      data = list;
+      return res.json({ reply, data });
+    }
+
+    // -----------------------------------------------------------------
     // FALLBACK / GENERAL HELP
     // -----------------------------------------------------------------
-    reply = `Hello! I am your compliance assistant. I can query the database directly or help you navigate. Try asking:\n\n` +
+    reply = `Hello! I am Lekha, your compliance assistant. I can query the database directly or help you navigate. Try asking:\n\n` +
             `• "Search asset UAIL/IT/LT/0001"\n` +
             `• "How many laptops do we have?"\n` +
             `• "Show unverified or overdue assets"\n` +
-            `• "List assets in Delhi office"\n` +
+            `• "List pending access requests"\n` +
             `• "Show my allocated assets"\n` +
+            `• "Show latest security incidents"\n` +
+            `• "Show non-conformances (NCR)"\n` +
             `• "Open controlled documents tab"`;
     
     res.json({ reply });
