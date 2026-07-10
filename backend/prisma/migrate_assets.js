@@ -1296,6 +1296,17 @@ async function migrate() {
 
   let inserted = 0;
   for (const record of records) {
+    let wStatus = 'Not Available';
+    const cf = record.customFields || {};
+    if (cf.warranty_satus && cf.warranty_satus !== 'Not Available') {
+      wStatus = cf.warranty_satus;
+    } else if (cf.warranty_end_date && cf.warranty_end_date !== 'Not Available') {
+      const endDate = new Date(cf.warranty_end_date);
+      if (!isNaN(endDate.getTime())) {
+        wStatus = endDate < new Date() ? 'Expired' : 'Active';
+      }
+    }
+
     const createdAsset = await prisma.asset.create({
       data: {
         assetTag: record.assetTag,
@@ -1314,7 +1325,8 @@ async function migrate() {
         nextVerificationDue: null,
         sourceSheet: record.sourceSheet,
         customFields: record.customFields,
-        isIncomplete: record.isIncomplete
+        isIncomplete: record.isIncomplete,
+        warrantyStatus: wStatus
       }
     });
 
@@ -1330,6 +1342,8 @@ async function migrate() {
     inserted += 1;
     if (inserted % 250 === 0) {
       console.log(`Inserted ${inserted}/${records.length} assets...`);
+      // Yield to the event loop to release memory and let GC run
+      await new Promise(resolve => setTimeout(resolve, 10));
     }
   }
 
@@ -1339,8 +1353,147 @@ async function migrate() {
   console.log(`Unique models cached for internet enrichment: ${Object.keys(readEnrichmentCache()).length}`);
   console.log('============================================================');
 
+  await migrateAllocationHistory();
+
   await prisma.$disconnect();
 }
+
+async function migrateAllocationHistory() {
+  console.log('============================================================');
+  console.log('Starting asset allocation history migration');
+  console.log('============================================================');
+
+  const historyFile = path.resolve(__dirname, '../../data_migration/ASSET ISSUE AND REVOKE TRACK.xlsx');
+  if (!fs.existsSync(historyFile)) {
+    console.warn(`Allocation history file not found at: ${historyFile}`);
+    return;
+  }
+
+  const workbook = XLSX.readFile(historyFile);
+  const sheet = workbook.Sheets.Sheet1 || workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
+  if (!rows.length) {
+    console.warn('Allocation history sheet is empty.');
+    return;
+  }
+
+  const headers = (rows[0] || []).map(h => String(h || '').trim());
+  const headerMap = {};
+  headers.forEach((h, idx) => {
+    headerMap[h] = idx;
+  });
+
+  const getCol = (row, columnName) => {
+    const idx = headerMap[columnName];
+    if (idx === undefined) return '';
+    return String(row[idx] || '').trim();
+  };
+
+  let createdHistoryCount = 0;
+  let createdAssetCount = 0;
+
+  // Clear existing allocation history first
+  await prisma.allocationHistory.deleteMany();
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.length === 0) continue;
+    if (row.every(c => c === null || c === undefined || String(c).trim() === '')) continue;
+
+    const modelName = getCol(row, 'Asset Name / Model') || 'Generic Model';
+    const assetTag = getCol(row, 'SAP Asset Code');
+    const serialNumber = getCol(row, 'Vendor Serial No');
+    const employeeName = getCol(row, 'Employee Name');
+    const employeeCode = getCol(row, 'E Code');
+    const department = getCol(row, 'Department');
+    const location = getCol(row, 'Location') || 'HQ Delhi';
+    const rawIssueDate = getCol(row, 'Issue Date');
+    const rawRevokeDate = getCol(row, 'Revoke Date');
+    const status = getCol(row, 'Status') || 'ISSUED';
+    const remarks = getCol(row, 'Remarks');
+
+    if (!serialNumber && !assetTag) continue;
+
+    // Find the asset by serial number or tag
+    let asset = null;
+    if (serialNumber) {
+      asset = await prisma.asset.findUnique({ where: { serialNumber } });
+    }
+    if (!asset && assetTag) {
+      asset = await prisma.asset.findUnique({ where: { assetTag } });
+    }
+
+    // If the asset doesn't exist, create it dynamically
+    if (!asset) {
+      const finalTag = assetTag || `UAIL/MIGRATE/HIST/${i}-${Date.now()}`;
+      const finalSerial = serialNumber || `SN-MIGRATE-HIST-${i}-${Date.now()}`;
+      const inferredCat = normalizeAssetCategory(modelName);
+
+      try {
+        asset = await prisma.asset.create({
+          data: {
+            assetTag: finalTag,
+            name: modelName,
+            category: inferredCat,
+            type: getDefaultAssetType(inferredCat),
+            model: modelName,
+            serialNumber: finalSerial,
+            classification: 'INTERNAL',
+            status: status.toUpperCase() === 'ISSUED' ? 'ALLOCATED' : 'PROCURED',
+            location: location,
+            acceptableUseSigned: true,
+            signOffDate: new Date(),
+            isIncomplete: true
+          }
+        });
+        createdAssetCount++;
+      } catch (err) {
+        console.warn(`  ⚠️ Failed to create dynamic asset for history row ${i}:`, err.message);
+        continue;
+      }
+    }
+
+    // Convert dates
+    const issueDate = rawIssueDate ? (isNaN(rawIssueDate) ? new Date(rawIssueDate) : excelDateToDate(rawIssueDate)) : null;
+    const revokeDate = rawRevokeDate ? (isNaN(rawRevokeDate) ? new Date(rawRevokeDate) : excelDateToDate(rawRevokeDate)) : null;
+
+    // Insert allocation history
+    try {
+      await prisma.allocationHistory.create({
+        data: {
+          assetId: asset.id,
+          employeeName: employeeName || 'Unknown Employee',
+          employeeCode: employeeCode || null,
+          department: department || null,
+          location: location || null,
+          issueDate,
+          revokeDate,
+          status: status.toUpperCase(),
+          remarks: remarks || null
+        }
+      });
+      createdHistoryCount++;
+    } catch (err) {
+      console.warn(`  ⚠️ Failed to create allocation history entry at row ${i}:`, err.message);
+    }
+  }
+
+  const dbHistCount = await prisma.allocationHistory.count();
+  const dbAssetCount = await prisma.asset.count();
+  console.log(`Successfully migrated ${createdHistoryCount} allocation history records.`);
+  console.log(`Dynamically created ${createdAssetCount} missing assets from history track.`);
+  console.log(`Verification - Database counts are: Assets=${dbAssetCount}, AllocationHistory=${dbHistCount}`);
+  console.log('============================================================');
+}
+
+function excelDateToDate(excelSerial) {
+  const days = Number(excelSerial);
+  if (isNaN(days) || days <= 0) return null;
+  const date = new Date((days - 25569) * 86400 * 1000);
+  return date;
+}
+
+
 
 if (require.main === module) {
   migrate().catch(async (error) => {

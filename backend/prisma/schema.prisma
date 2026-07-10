@@ -102,11 +102,12 @@ model Asset {
   // Extra attributes & data migration parameters
   sourceSheet  String?
   customFields Json?
-  isIncomplete Boolean @default(false)
-
-  history   AssetHistory[]
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
+  isIncomplete      Boolean             @default(false)
+  warrantyStatus    String?             @default("Not Available")
+  history           AssetHistory[]
+  allocationHistory AllocationHistory[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   @@index([category])
   @@index([sourceSheet])
@@ -642,4 +643,22 @@ model IsmsMetrics {
   targetValue String
   actualValue String
   frequency   String
+}
+
+model AllocationHistory {
+  id           String    @id @default(uuid())
+  assetId      String
+  asset        Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  employeeName String
+  employeeCode String?
+  department   String?
+  location     String?
+  issueDate    DateTime?
+  revokeDate   DateTime?
+  status       String
+  remarks      String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([assetId])
 }

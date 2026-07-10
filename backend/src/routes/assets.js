@@ -83,6 +83,9 @@ router.get('/:id', authenticate, async (req, res) => {
         },
         history: {
           orderBy: { timestamp: 'desc' }
+        },
+        allocationHistory: {
+          orderBy: { issueDate: 'desc' }
         }
       }
     });

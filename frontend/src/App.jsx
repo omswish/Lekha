@@ -4,10 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, ShieldAlert, LogOut, LayoutDashboard, UserCheck, 
   BookOpen, History, PlusCircle, Edit, Trash2, Shield, User, HardDrive,
-  CalendarCheck, ClipboardList, CheckSquare, Settings, GraduationCap, Activity, Users, Clipboard, Trash, Key, Layers, FileText, FileDigit
+  CalendarCheck, ClipboardList, CheckSquare, Settings, GraduationCap, Activity, Users, Clipboard, Trash, Key, Layers, FileText, FileDigit,
+  Eye
 } from 'lucide-react';
 import ConsentModal from './components/ConsentModal';
 import AssetForm from './components/AssetForm';
+import AssetDetailsModal from './components/AssetDetailsModal';
 import AuditLogs from './components/AuditLogs';
 import RopaRegister from './components/RopaRegister';
 import ComplianceTasks from './components/ComplianceTasks';
@@ -124,7 +126,9 @@ export default function App() {
   // Modal displays
   const [showAssetForm, setShowAssetForm] = useState(false);
   const [showBulkAssetForm, setShowBulkAssetForm] = useState(false);
+  const [showAssetDetailsModal, setShowAssetDetailsModal] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState(null);
+  const [selectedAssetForDetails, setSelectedAssetForDetails] = useState(null);
 
   // Inventory filtering state
   const [assetCategoryFilter, setAssetCategoryFilter] = useState('ALL');
@@ -157,6 +161,8 @@ export default function App() {
     setAssetStatusFilter('ACTIVE');
     setAssetSearchQuery('');
     setShowBulkAssetForm(false);
+    setShowAssetDetailsModal(false);
+    setSelectedAssetForDetails(null);
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('user');
   };
@@ -890,7 +896,7 @@ export default function App() {
                       <th>Acceptable Use</th>
                       <th>Last Verified</th>
                       <th>Next Due Date</th>
-                      {(user.role === 'ADMIN' || user.role === 'ASSET_MANAGER') && <th style={{ textAlign: 'right' }}>Actions</th>}
+                      <th style={{ textAlign: 'right' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -935,44 +941,58 @@ export default function App() {
                           </td>
                           <td style={{ fontSize: '0.85rem' }}>{lastVerified}</td>
                           <td style={{ fontSize: '0.85rem', fontWeight: 500 }}>
-                            <span style={{ color: verificationOverdue ? 'var(--accent-danger)' : 'inherit' }}>
-                              {nextDue}
-                              {verificationOverdue && ' (Overdue)'}
-                            </span>
-                          </td>
-                          {(user.role === 'ADMIN' || user.role === 'ASSET_MANAGER') && (
-                            <td style={{ textAlign: 'right' }}>
-                              <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
-                                {/* Annual physical verification trigger check-off */}
-                                <button
-                                  className="btn btn-secondary btn-sm"
-                                  style={{ padding: '0.3rem 0.5rem', display: 'inline-flex', alignItems: 'center' }}
-                                  onClick={() => handleVerifyAsset(asset.id, asset.assetTag)}
-                                  title="Perform Annual Physical Verification Audit"
-                                >
-                                  <CheckSquare size={12} />
-                                </button>
-                                
-                                <button 
-                                  className="btn btn-secondary btn-sm"
-                                  style={{ padding: '0.3rem 0.5rem' }}
-                                  onClick={() => { setSelectedAsset(asset); setShowAssetForm(true); }}
-                                >
-                                  <Edit size={12} />
-                                </button>
-                                
-                                {user.role === 'ADMIN' && (
-                                  <button 
-                                    className="btn btn-danger btn-sm"
-                                    style={{ padding: '0.3rem 0.5rem' }}
-                                    onClick={() => handleDeleteAsset(asset.id, asset.assetTag)}
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          )}
+                             <span style={{ color: verificationOverdue ? 'var(--accent-danger)' : 'inherit' }}>
+                               {nextDue}
+                               {verificationOverdue && ' (Overdue)'}
+                             </span>
+                           </td>
+                           <td style={{ textAlign: 'right' }}>
+                             <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                               {/* Eye icon to view details */}
+                               <button
+                                 className="btn btn-secondary btn-sm"
+                                 style={{ padding: '0.3rem 0.5rem', display: 'inline-flex', alignItems: 'center' }}
+                                 onClick={() => { setSelectedAssetForDetails(asset); setShowAssetDetailsModal(true); }}
+                                 title="View Full Asset Details"
+                               >
+                                 <Eye size={12} />
+                               </button>
+
+                               {/* Verify, Edit, Delete only for Admin / Manager */}
+                               {(user.role === 'ADMIN' || user.role === 'ASSET_MANAGER') && (
+                                 <>
+                                   <button
+                                     className="btn btn-secondary btn-sm"
+                                     style={{ padding: '0.3rem 0.5rem', display: 'inline-flex', alignItems: 'center' }}
+                                     onClick={() => handleVerifyAsset(asset.id, asset.assetTag)}
+                                     title="Perform Annual Physical Verification Audit"
+                                   >
+                                     <CheckSquare size={12} />
+                                   </button>
+                                   
+                                   <button 
+                                     className="btn btn-secondary btn-sm"
+                                     style={{ padding: '0.3rem 0.5rem' }}
+                                     onClick={() => { setSelectedAsset(asset); setShowAssetForm(true); }}
+                                     title="Edit Asset"
+                                   >
+                                     <Edit size={12} />
+                                   </button>
+                                   
+                                   {user.role === 'ADMIN' && (
+                                     <button 
+                                       className="btn btn-danger btn-sm"
+                                       style={{ padding: '0.3rem 0.5rem' }}
+                                       onClick={() => handleDeleteAsset(asset.id, asset.assetTag)}
+                                       title="Decommission Asset"
+                                     >
+                                       <Trash2 size={12} />
+                                     </button>
+                                   )}
+                                 </>
+                               )}
+                             </div>
+                           </td>
                         </tr>
                       );
                     })}
@@ -1239,6 +1259,15 @@ export default function App() {
           token={token}
           onSave={() => { setShowBulkAssetForm(false); fetchInventoryData(); }}
           onCancel={() => setShowBulkAssetForm(false)}
+        />
+      )}
+
+      {/* Asset Details View Modal */}
+      {showAssetDetailsModal && (
+        <AssetDetailsModal
+          asset={selectedAssetForDetails}
+          token={token}
+          onClose={() => { setShowAssetDetailsModal(false); setSelectedAssetForDetails(null); }}
         />
       )}
 

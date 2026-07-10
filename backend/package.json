@@ -8,7 +8,7 @@
     "dev": "nodemon src/index.js",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
-    "db:seed": "node prisma/seed.js"
+    "db:seed": "node --max-old-space-size=4096 prisma/seed.js"
   },
   "dependencies": {
     "@prisma/client": "^5.10.2",
