@@ -30,7 +30,7 @@ adminDoc.pipe(adminStream);
 // Cover
 adminDoc.rect(0, 0, 612, 792).fill('#fbfaf7');
 adminDoc.fillColor(primaryColor).fontSize(26).font('Helvetica-Bold').text('ADMINISTRATIVE OPERATIONS MANUAL', 50, 200, { align: 'center' });
-adminDoc.fillColor(secondaryColor).fontSize(16).font('Helvetica-Bold').text('AssetGuard Auditor & Compliance Portal', 50, 240, { align: 'center' });
+adminDoc.fillColor(secondaryColor).fontSize(16).font('Helvetica-Bold').text('Lekha Auditor & Compliance Portal', 50, 240, { align: 'center' });
 adminDoc.rect(100, 280, 412, 3).fill(primaryColor);
 adminDoc.fillColor(mutedColor).fontSize(11).font('Helvetica').text('Internal Audit Controls, CERT-In Logs, and Security Administration', 50, 315, { align: 'center' });
 adminDoc.fillColor(secondaryColor).fontSize(10).font('Helvetica').text('System Role: ADMIN (Auditor)\nPublished: July 2026\nCorporate Auditing Division', 50, 600, { align: 'center' });
@@ -39,7 +39,7 @@ adminDoc.fillColor(secondaryColor).fontSize(10).font('Helvetica').text('System R
 adminDoc.addPage();
 createPageHeader(adminDoc, '1. Introduction & Security Administration');
 adminDoc.fillColor(secondaryColor).fontSize(10).font('Helvetica').text(
-  'As an Administrator (Auditor) on the AssetGuard portal, you are responsible for monitoring data processing compliance, signing off corrective actions, and auditing platform logs.\n\n' +
+  'As an Administrator (Auditor) on the Lekha portal, you are responsible for monitoring data processing compliance, signing off corrective actions, and auditing platform logs.\n\n' +
   'Key Responsibilities:\n' +
   '• Reviewing Indian CERT-In security audit logs to trace unauthorized activities.\n' +
   '• Approving or rejecting employee logical access requests (FMT 08/32).\n' +
@@ -79,7 +79,7 @@ managerDoc.pipe(managerStream);
 // Cover
 managerDoc.rect(0, 0, 612, 792).fill('#fbfaf7');
 managerDoc.fillColor(primaryColor).fontSize(26).font('Helvetica-Bold').text('ASSET CUSTODIAN MANUAL', 50, 200, { align: 'center' });
-managerDoc.fillColor(secondaryColor).fontSize(16).font('Helvetica-Bold').text('AssetGuard Inventory & Operations Portal', 50, 240, { align: 'center' });
+managerDoc.fillColor(secondaryColor).fontSize(16).font('Helvetica-Bold').text('Lekha Inventory & Operations Portal', 50, 240, { align: 'center' });
 managerDoc.rect(100, 280, 412, 3).fill(primaryColor);
 managerDoc.fillColor(mutedColor).fontSize(11).font('Helvetica').text('IT Asset Lifecycle, Patch Audits, and Backup Registries', 50, 315, { align: 'center' });
 managerDoc.fillColor(secondaryColor).fontSize(10).font('Helvetica').text('System Role: ASSET_MANAGER (Custodian)\nPublished: July 2026\nCorporate Auditing Division', 50, 600, { align: 'center' });
@@ -128,7 +128,7 @@ empDoc.pipe(empStream);
 // Cover
 empDoc.rect(0, 0, 612, 792).fill('#fbfaf7');
 empDoc.fillColor(primaryColor).fontSize(26).font('Helvetica-Bold').text('EMPLOYEE COMPLIANCE MANUAL', 50, 200, { align: 'center' });
-empDoc.fillColor(secondaryColor).fontSize(16).font('Helvetica-Bold').text('AssetGuard Personal Data Protection Portal', 50, 240, { align: 'center' });
+empDoc.fillColor(secondaryColor).fontSize(16).font('Helvetica-Bold').text('Lekha Personal Data Protection Portal', 50, 240, { align: 'center' });
 empDoc.rect(100, 280, 412, 3).fill(primaryColor);
 empDoc.fillColor(mutedColor).fontSize(11).font('Helvetica').text('Data Subject Rights, Access Requests, and Profile Security', 50, 315, { align: 'center' });
 empDoc.fillColor(secondaryColor).fontSize(10).font('Helvetica').text('System Role: EMPLOYEE (Data Principal)\nPublished: July 2026\nCorporate Auditing Division', 50, 600, { align: 'center' });

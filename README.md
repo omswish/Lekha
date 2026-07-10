@@ -1,6 +1,6 @@
-# AssetGuard: Compliant Local IT Asset Management System
+# Lekha: Compliant Local IT Asset Management System
 
-AssetGuard is a local departmental IT inventory tracking web application built using **React**, **Node.js (Express)**, **Prisma ORM**, and **PostgreSQL**. The project is architected to fulfill the core controls of **ISO 27001:2022 (IT Asset Management)**, the **Indian CERT-In Cybersecurity Directives (180-day log retention)**, and the **Digital Personal Data Protection (DPDP) Act, 2023 (Consent registers and Right to Erasure anonymization)**.
+Lekha is a local departmental IT inventory tracking web application built using **React**, **Node.js (Express)**, **Prisma ORM**, and **PostgreSQL**. The project is architected to fulfill the core controls of **ISO 27001:2022 (IT Asset Management)**, the **Indian CERT-In Cybersecurity Directives (180-day log retention)**, and the **Digital Personal Data Protection (DPDP) Act, 2023 (Consent registers and Right to Erasure anonymization)**.
 
 ---
 

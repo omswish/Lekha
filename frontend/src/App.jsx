@@ -413,7 +413,7 @@ export default function App() {
           <div className="auth-header">
             <div className="auth-logo">
               <ShieldCheck size={36} style={{ color: 'var(--accent-primary)' }} />
-              <span>AssetGuard</span>
+              <span>Lekha</span>
             </div>
             <h3 style={{ fontSize: '1.15rem', marginTop: '0.5rem', fontWeight: 700 }}>Compliance & Asset Manager</h3>
             <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
@@ -488,7 +488,7 @@ export default function App() {
       <div className="sidebar">
         <div className="sidebar-logo">
           <Shield size={24} style={{ color: '#3b82f6' }} />
-          <span>AssetGuard </span>
+          <span>Lekha </span>
         </div>
 
         <nav>

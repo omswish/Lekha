@@ -24,7 +24,7 @@ const mutedColor = '#5e5e5e'; // Slate text
 doc.rect(0, 0, 612, 792).fill('#fbfaf7'); // Cream cover page
 
 doc.fillColor(primaryColor).fontSize(28).font('Helvetica-Bold')
-   .text('COMPLIANCE & ASSET GUARD', 50, 200, { align: 'center' });
+   .text('COMPLIANCE & LEKHA PORTAL', 50, 200, { align: 'center' });
 
 doc.fillColor(secondaryColor).fontSize(18).font('Helvetica-Bold')
    .text('Unified Help & Operations Manual', 50, 240, { align: 'center' });
@@ -44,7 +44,7 @@ doc.fillColor(primaryColor).fontSize(18).font('Helvetica-Bold').text('Table of C
 doc.rect(50, 75, 512, 1).fill(primaryColor);
 
 const topics = [
-  { p: '1. Introduction to AssetGuard Platform', page: '3' },
+  { p: '1. Introduction to Lekha Platform', page: '3' },
   { p: '2. User Access Groups & Permissions', page: '3' },
   { p: '3. Asset Inventory Registration & Verification (ISO 27001 A.5.9)', page: '4' },
   { p: '4. Privacy Compliance Controls (DPDP Section 11 & 12)', page: '4' },
@@ -63,9 +63,9 @@ topics.forEach(t => {
 doc.addPage();
 
 // Page 3: Intro & Roles
-doc.fillColor(primaryColor).fontSize(16).font('Helvetica-Bold').text('1. Introduction to AssetGuard Platform', 50, 50);
+doc.fillColor(primaryColor).fontSize(16).font('Helvetica-Bold').text('1. Introduction to Lekha Platform', 50, 50);
 doc.fillColor(secondaryColor).fontSize(10).font('Helvetica').text(
-  'AssetGuard is a compliance-centric IT Asset Management portal engineered to meet strict Indian CERT-In guidelines and ISO 27001 standards. The user interface borrows layout principles from IBM Maximo, focusing on high-contrast data tables, structured KPI grids, and clean cream-orange styling.',
+  'Lekha is a compliance-centric IT Asset Management portal engineered to meet strict Indian CERT-In guidelines and ISO 27001 standards. The user interface borrows layout principles from IBM Maximo, focusing on high-contrast data tables, structured KPI grids, and clean cream-orange styling.',
   50, 75, { width: 512, align: 'justify' }
 );
 
