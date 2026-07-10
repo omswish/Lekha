@@ -13,6 +13,7 @@ const prisma = new PrismaClient();
  * Populates mock logs, checklists, risk sheets, access forms, and controlled docs.
  */
 async function main() {
+  console.log('DATABASE_URL in seed:', process.env.DATABASE_URL);
   console.log('Seeding digitized compliance registers (all ISO Formats & Policies)...');
 
   // 1. Purge existing records in reverse dependency order
@@ -62,9 +63,10 @@ async function main() {
   await prisma.controlledDocument.deleteMany();
   await prisma.roPARecord.deleteMany();
   await prisma.auditLog.deleteMany();
-  await prisma.assetHistory.deleteMany();
-  await prisma.asset.deleteMany();
-  await prisma.user.deleteMany();
+  // NOTE: Asset and AssetHistory purge is SKIPPED here.
+  // They are only cleared inside migrate_assets.js when a full import runs.
+  // This prevents wiping imported Excel data on every seed run.
+  // But we DO upsert users to ensure they always exist with correct credentials.
 
   // 2. Generate cryptographically secure passwords
   const salt = await bcrypt.genSalt(10);
@@ -72,9 +74,11 @@ async function main() {
   const employeePasswordHash = await bcrypt.hash('employee123', salt);
   const managerPasswordHash = await bcrypt.hash('manager123', salt);
 
-  // 3. Create Seed Users
-  const admin = await prisma.user.create({
-    data: {
+  // 3. Upsert Seed Users (idempotent)
+  const admin = await prisma.user.upsert({
+    where: { email: 'ramanath.satapathy@adityabirla.com' },
+    update: { passwordHash: adminPasswordHash },
+    create: {
       email: 'ramanath.satapathy@adityabirla.com',
       name: 'Ramanath Satapathy',
       passwordHash: adminPasswordHash,
@@ -86,8 +90,10 @@ async function main() {
     },
   });
 
-  const employee = await prisma.user.create({
-    data: {
+  const employee = await prisma.user.upsert({
+    where: { email: 'purna.c.nayak@adityabirla.com' },
+    update: { passwordHash: employeePasswordHash },
+    create: {
       email: 'purna.c.nayak@adityabirla.com',
       name: 'Purna C. Nayak',
       passwordHash: employeePasswordHash,
@@ -99,8 +105,10 @@ async function main() {
     },
   });
 
-  const manager = await prisma.user.create({
-    data: {
+  const manager = await prisma.user.upsert({
+    where: { email: 'omkar.s@adityabirla.com' },
+    update: { passwordHash: managerPasswordHash },
+    create: {
       email: 'omkar.s@adityabirla.com',
       name: 'Omkar S.',
       passwordHash: managerPasswordHash,
@@ -715,8 +723,21 @@ async function main() {
   });
 
   // Run dynamic excel worksheets parser engine to populate actual files data
-  await parseAndSeedExcel(prisma, admin, employee, manager);
-  await migrate();
+  // IDEMPOTENT: Skip expensive Excel import if assets already exist in DB
+  const existingAssetCount = await prisma.asset.count();
+  const existingHistoryCount = await prisma.allocationHistory.count();
+  if (existingAssetCount === 0) {
+    console.log('No assets found in DB — running full Excel migration (one-time)...');
+    await parseAndSeedExcel(prisma, admin, employee, manager);
+    await migrate();
+  } else if (existingHistoryCount === 0) {
+    console.log(`Assets already populated (${existingAssetCount}). Running allocation history migration only...`);
+    await parseAndSeedExcel(prisma, admin, employee, manager);
+    const { migrateAllocationHistoryOnly } = require('./migrate_assets');
+    await migrateAllocationHistoryOnly();
+  } else {
+    console.log(`Assets (${existingAssetCount}) and AllocationHistory (${existingHistoryCount}) already populated. Skipping Excel import.`);
+  }
 
   // 23. Initialize CERT-In audit log entry
   await prisma.auditLog.create({
@@ -745,6 +766,7 @@ async function main() {
 main()
   .then(async () => {
     await prisma.$disconnect();
+    process.exit(0);
   })
   .catch(async (e) => {
     console.error('Error seeding compliance database:', e);

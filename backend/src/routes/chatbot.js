@@ -40,6 +40,8 @@ router.post('/message', authenticate, async (req, res) => {
   let action = null;
 
   try {
+    // Query routing begins below
+
     // -----------------------------------------------------------------
     // 1. EXTRACT ASSET TAG (Pattern: UAIL/IT/XX/NNNN or UAIL/MIGRATE/XX/NNNN)
     // -----------------------------------------------------------------
@@ -86,35 +88,92 @@ router.post('/message', authenticate, async (req, res) => {
     }
 
     // -----------------------------------------------------------------
-    // 2A. ASSET DETAILS FOR SPECIFIC USER NAME / EMAIL
+    // 2A. ASSET DETAILS FOR SPECIFIC USER NAME / EMAIL (WITH HISTORICAL MATCHING)
     // -----------------------------------------------------------------
     const detailsMatch = query.match(/(?:details\s+for|assets\s+of|allocated\s+to|assigned\s+to)\s+([a-z0-9\.\-_@\s]+)/i);
     if (detailsMatch) {
       const userSearch = detailsMatch[1].trim();
-      const matchedUser = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { name: { contains: userSearch, mode: 'insensitive' } },
-            { email: { contains: userSearch, mode: 'insensitive' } }
-          ]
-        }
-      });
+      
+      // Build search terms list for fuzzy matching (e.g. angadprit -> angad)
+      const searchTerms = [userSearch];
+      const firstWord = userSearch.split(/\s+/)[0];
+      if (firstWord.length >= 4) {
+        searchTerms.push(firstWord);
+        searchTerms.push(firstWord.substring(0, Math.min(5, firstWord.length)));
+      }
 
-      if (matchedUser) {
-        const userAssets = await prisma.asset.findMany({
-          where: { ownerId: matchedUser.id },
-          select: { assetTag: true, name: true, model: true, status: true, location: true }
+      let matchedUser = null;
+      // 1. Search in User table
+      for (const term of searchTerms) {
+        matchedUser = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { name: { contains: term, mode: 'insensitive' } },
+              { email: { contains: term, mode: 'insensitive' } }
+            ]
+          }
         });
+        if (matchedUser) break;
+      }
 
-        if (userAssets.length > 0) {
-          reply = `Found **${userAssets.length}** asset(s) allocated to user **${matchedUser.name}** (${matchedUser.email}):`;
-          data = userAssets;
-        } else {
-          reply = `User **${matchedUser.name}** (${matchedUser.email}) exists in the registry, but has no physical assets allocated currently.`;
+      // 2. Search in AllocationHistory table
+      let matchedHistories = [];
+      let historyEmployeeName = '';
+      for (const term of searchTerms) {
+        matchedHistories = await prisma.allocationHistory.findMany({
+          where: {
+            employeeName: { contains: term, mode: 'insensitive' }
+          },
+          include: {
+            asset: {
+              select: {
+                assetTag: true,
+                name: true,
+                model: true,
+                status: true
+              }
+            }
+          }
+        });
+        if (matchedHistories.length > 0) {
+          historyEmployeeName = matchedHistories[0].employeeName;
+          break;
         }
+      }
+
+      // Format response based on what we found
+      if (matchedUser || matchedHistories.length > 0) {
+        let replyParts = [];
+        let combinedData = {};
+
+        if (matchedUser) {
+          const userAssets = await prisma.asset.findMany({
+            where: { ownerId: matchedUser.id },
+            select: { assetTag: true, name: true, model: true, status: true, location: true }
+          });
+          replyParts.push(`Found active directory user **${matchedUser.name}** (${matchedUser.email}).`);
+          combinedData.activeUser = matchedUser.name;
+          combinedData.activeAssets = userAssets;
+        }
+
+        if (matchedHistories.length > 0) {
+          replyParts.push(`Found **${matchedHistories.length}** allocation track event(s) in the historical issue register for **${historyEmployeeName}**.`);
+          combinedData.historicalEmployee = historyEmployeeName;
+          combinedData.allocationHistory = matchedHistories.map(h => ({
+            assetTag: h.asset?.assetTag || 'UAIL/MIGRATE/HIST',
+            assetName: h.asset?.name || 'Incomplete Asset',
+            model: h.asset?.model || 'Unknown Model',
+            issueDate: h.issueDate ? new Date(h.issueDate).toLocaleDateString('en-IN') : 'N/A',
+            revokeDate: h.revokeDate ? new Date(h.revokeDate).toLocaleDateString('en-IN') : 'Present',
+            status: h.status
+          }));
+        }
+
+        reply = replyParts.join('\n\n');
+        data = combinedData;
         return res.json({ reply, data });
       } else {
-        reply = `I could not find any registered user matching **"${userSearch}"** in the database.`;
+        reply = `I could not find any active user or historical allocation matching **"${userSearch}"** in the database.`;
         return res.json({ reply });
       }
     }

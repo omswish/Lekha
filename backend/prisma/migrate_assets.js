@@ -1371,6 +1371,31 @@ async function migrateAllocationHistory() {
 
   const workbook = XLSX.readFile(historyFile);
   const sheet = workbook.Sheets.Sheet1 || workbook.Sheets[workbook.SheetNames[0]];
+
+  // Fix bloated range: the original file has a stray cell at row 1048565 causing
+  // sheet_to_json to try processing 1M+ rows. Override to actual data extent.
+  if (sheet['!ref']) {
+    const refMatch = sheet['!ref'].match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
+    if (refMatch && parseInt(refMatch[4]) > 50000) {
+      // Find actual last row with data
+      const cellKeys = Object.keys(sheet).filter(k => !k.startsWith('!'));
+      let maxDataRow = 0;
+      cellKeys.forEach(k => {
+        const m = k.match(/^[A-Z]+(\d+)$/);
+        if (m) {
+          const r = parseInt(m[1]);
+          // Skip obvious stray cells (e.g., row 1048565)
+          if (r < 50000 && r > maxDataRow) maxDataRow = r;
+        }
+      });
+      if (maxDataRow > 0) {
+        const newRef = `${refMatch[1]}${refMatch[2]}:${refMatch[3]}${maxDataRow}`;
+        console.log(`Overriding bloated sheet range ${sheet['!ref']} → ${newRef}`);
+        sheet['!ref'] = newRef;
+      }
+    }
+  }
+
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
   if (!rows.length) {
     console.warn('Allocation history sheet is empty.');
@@ -1400,19 +1425,20 @@ async function migrateAllocationHistory() {
     if (!row || row.length === 0) continue;
     if (row.every(c => c === null || c === undefined || String(c).trim() === '')) continue;
 
-    const modelName = getCol(row, 'Asset Name / Model') || 'Generic Model';
-    const assetTag = getCol(row, 'SAP Asset Code');
-    const serialNumber = getCol(row, 'Vendor Serial No');
-    const employeeName = getCol(row, 'Employee Name');
-    const employeeCode = getCol(row, 'E Code');
-    const department = getCol(row, 'Department');
-    const location = getCol(row, 'Location') || 'HQ Delhi';
-    const rawIssueDate = getCol(row, 'Issue Date');
-    const rawRevokeDate = getCol(row, 'Revoke Date');
-    const status = getCol(row, 'Status') || 'ISSUED';
-    const remarks = getCol(row, 'Remarks');
+    const modelName = getCol(row, 'HOSTNAME') || 'Generic Model';
+    const assetTag = ''; // No asset tag column in this file
+    const serialNumber = getCol(row, 'SERIAL NO/SERVICE TAG');
+    const employeeName = getCol(row, 'USER NAME');
+    const employeeCode = getCol(row, 'SL NO');
+    const department = '';
+    const location = 'Hirakud Plant';
+    const rawIssueDate = getCol(row, 'DATE');
+    const rawRevokeDate = '';
+    const actionType = getCol(row, 'ISSUED/ REVOKED') || 'ISSUED';
+    const status = actionType.toUpperCase().includes('REVOKE') ? 'REVOKED' : 'ISSUED';
+    const remarks = getCol(row, 'REMARK');
 
-    if (!serialNumber && !assetTag) continue;
+    if (!serialNumber) continue;
 
     // Find the asset by serial number or tag
     let asset = null;
@@ -1453,9 +1479,21 @@ async function migrateAllocationHistory() {
       }
     }
 
-    // Convert dates
-    const issueDate = rawIssueDate ? (isNaN(rawIssueDate) ? new Date(rawIssueDate) : excelDateToDate(rawIssueDate)) : null;
-    const revokeDate = rawRevokeDate ? (isNaN(rawRevokeDate) ? new Date(rawRevokeDate) : excelDateToDate(rawRevokeDate)) : null;
+    // Convert dates — guard against Invalid Date objects
+    let issueDate = null;
+    if (rawIssueDate) {
+      const parsed = isNaN(rawIssueDate) ? new Date(rawIssueDate) : excelDateToDate(rawIssueDate);
+      if (parsed && !isNaN(parsed.getTime()) && parsed.getFullYear() > 1970 && parsed.getFullYear() < 2100) {
+        issueDate = parsed;
+      }
+    }
+    let revokeDate = null;
+    if (rawRevokeDate) {
+      const parsed = isNaN(rawRevokeDate) ? new Date(rawRevokeDate) : excelDateToDate(rawRevokeDate);
+      if (parsed && !isNaN(parsed.getTime()) && parsed.getFullYear() > 1970 && parsed.getFullYear() < 2100) {
+        revokeDate = parsed;
+      }
+    }
 
     // Insert allocation history
     try {
@@ -1496,13 +1534,19 @@ function excelDateToDate(excelSerial) {
 
 
 if (require.main === module) {
-  migrate().catch(async (error) => {
-    console.error('Asset migration failed:', error);
-    await prisma.$disconnect();
-    process.exit(1);
-  });
+  migrate()
+    .then(() => process.exit(0))
+    .catch(async (error) => {
+      console.error('Asset migration failed:', error);
+      await prisma.$disconnect();
+      process.exit(1);
+    });
 }
 
 module.exports = {
-  migrate
+  migrate,
+  migrateAllocationHistoryOnly: async function () {
+    await migrateAllocationHistory();
+    await prisma.$disconnect();
+  }
 };
