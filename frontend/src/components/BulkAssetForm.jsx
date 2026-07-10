@@ -1,4 +1,4 @@
-// frontend/src/components/AssetForm.jsx
+// frontend/src/components/BulkAssetForm.jsx
 
 import React, { useState, useEffect } from 'react';
 import { Package, ShieldAlert, Check } from 'lucide-react';
@@ -71,76 +71,20 @@ function findCategoryOption(value) {
   return ASSET_CATEGORY_OPTIONS.find((option) => option.value === value) || ASSET_CATEGORY_OPTIONS[0];
 }
 
-function inferCategory(asset) {
-  if (asset?.category) {
-    return findCategoryOption(asset.category).value;
-  }
-
-  const rawType = String(asset?.type || '').toLowerCase();
-  if (rawType.includes('desktop')) return 'DESKTOP';
-  if (rawType.includes('printer')) return 'PRINTER';
-  if (rawType.includes('mtr')) return 'MTR';
-  if (rawType.includes('kiosk')) return 'KIOSK';
-  if (rawType.includes('server')) return 'SERVER';
-  if (rawType.includes('storage')) return 'STORAGE';
-  if (rawType.includes('switch')) return 'SWITCH';
-  if (rawType.includes('router')) return 'ROUTER';
-  if (rawType.includes('firewall')) return 'FIREWALL';
-  return 'LAPTOP';
-}
-
-/**
- * AssetForm Component: Manages registration or modifications of IT inventory assets.
- * Fulfills ISO 27001 Control A.5.9 (Asset Inventory) and A.5.10 (Acceptable Use policy).
- * 
- * @param {Object} props
- * @param {Object} props.asset - Existing asset object (if editing; null if creating new).
- * @param {Array<Object>} props.users - List of active employees available for assignment.
- * @param {string} props.token - JWT session authorization token.
- * @param {Function} props.onSave - Callback function to notify completion and refresh listing.
- * @param {Function} props.onCancel - Callback function to dismiss the modal.
- */
-export default function AssetForm({ asset, users, token, onSave, onCancel }) {
-  // Determine if form is in edit or register mode
-  const isEdit = !!asset;
-  const defaultCategory = inferCategory(asset);
-  const defaultType = asset?.type || findCategoryOption(defaultCategory).defaultType;
-
-  // Initialize input form states
+export default function BulkAssetForm({ users, token, onSave, onCancel }) {
+  const [category, setCategory] = useState('LAPTOP');
+  const [type, setType] = useState('Laptop');
   const [name, setName] = useState('');
-  const [category, setCategory] = useState(defaultCategory);
-  const [type, setType] = useState(defaultType);
   const [model, setModel] = useState('');
-  const [serialNumber, setSerialNumber] = useState('');
   const [classification, setClassification] = useState('INTERNAL');
-  const [status, setStatus] = useState('PROCURED');
   const [location, setLocation] = useState('');
   const [ownerId, setOwnerId] = useState('');
-  const [acceptableUseSigned, setAcceptableUseSigned] = useState(false);
   const [customFields, setCustomFields] = useState({});
+  const [serialsText, setSerialsText] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  // Hydrate form fields if editing an existing asset
-  useEffect(() => {
-    if (asset) {
-      const nextCategory = inferCategory(asset);
-      setName(asset.name || '');
-      setCategory(nextCategory);
-      setType(asset.type || findCategoryOption(nextCategory).defaultType);
-      setModel(asset.model || '');
-      setSerialNumber(asset.serialNumber || '');
-      setClassification(asset.classification || 'INTERNAL');
-      setStatus(asset.status || 'PROCURED');
-      setLocation(asset.location || '');
-      setOwnerId(asset.ownerId || '');
-      setAcceptableUseSigned(asset.acceptableUseSigned || false);
-      setCustomFields(asset.customFields || {});
-    } else {
-      setCustomFields({});
-    }
-  }, [asset]);
+  const [success, setSuccess] = useState('');
 
   const handleCategoryChange = (nextCategory) => {
     const previousDefaultType = findCategoryOption(category).defaultType;
@@ -152,17 +96,6 @@ export default function AssetForm({ asset, users, token, onSave, onCancel }) {
     }
   };
 
-  // Adjust status automatically when owner is selected
-  const handleOwnerChange = (val) => {
-    setOwnerId(val);
-    if (val) {
-      setStatus('ALLOCATED');
-    } else {
-      setStatus('PROCURED');
-      setAcceptableUseSigned(false);
-    }
-  };
-
   const handleCustomFieldChange = (key, value) => {
     setCustomFields((current) => ({
       ...current,
@@ -170,61 +103,64 @@ export default function AssetForm({ asset, users, token, onSave, onCancel }) {
     }));
   };
 
-  // Submit Handler
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
-    // Field check
-    if (!name || !model || !serialNumber || !location) {
-      setError('Please fill in all mandatory asset fields.');
+    // Parse serial numbers
+    const serialNumbers = serialsText
+      .split('\n')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    if (serialNumbers.length === 0) {
+      setError('Please provide at least one hardware serial number.');
+      return;
+    }
+
+    if (!name || !model || !location) {
+      setError('Please fill all required common fields.');
       return;
     }
 
     setLoading(true);
 
     try {
-      const url = isEdit 
-        ? `http://localhost:5000/api/assets/${asset.id}` 
-        : 'http://localhost:5000/api/assets';
-        
-      const method = isEdit ? 'PUT' : 'POST';
       const categoryFields = CATEGORY_SPECIFIC_FIELDS[category] || [];
       const categoryCustomFields = categoryFields.reduce((result, field) => {
         result[field.key] = customFields[field.key] || '';
         return result;
       }, {});
 
-      const payload = {
-        name,
-        category,
-        type,
-        model,
-        serialNumber,
-        classification,
-        status,
-        location,
-        customFields: categoryCustomFields,
-        ownerId: ownerId || null,
-        acceptableUseSigned: !!ownerId && acceptableUseSigned
-      };
-
-      const response = await fetch(url, {
-        method,
+      const response = await fetch('http://localhost:5000/api/assets/bulk', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          name,
+          category,
+          type,
+          model,
+          serialNumbers,
+          classification,
+          location,
+          customFields: categoryCustomFields,
+          ownerId: ownerId || null
+        })
       });
 
       const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to record asset.');
+        throw new Error(data.error || 'Bulk registration failed.');
       }
 
-      onSave(data);
+      setSuccess(`Successfully registered ${serialNumbers.length} assets!`);
+      setTimeout(() => {
+        onSave();
+      }, 1500);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -232,33 +168,42 @@ export default function AssetForm({ asset, users, token, onSave, onCancel }) {
     }
   };
 
+  const serialCount = serialsText.split('\n').map(s => s.trim()).filter(Boolean).length;
+
   return (
     <div className="modal-overlay">
       <div className="modal-content" style={{ maxWidth: '780px' }}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Package size={22} className="badge-internal" style={{ color: '#3b82f6' }} />
-            <h3 className="modal-title">{isEdit ? 'Modify IT Asset Record' : 'Register New IT Asset'}</h3>
+            <h3 className="modal-title">Bulk Asset Registration</h3>
           </div>
-          <button className="modal-close" onClick={onCancel} disabled={loading}>×</button>
+          <button className="modal-close" onClick={onCancel}>&times;</button>
         </div>
 
         {error && (
-          <div className="alert alert-danger">
+          <div className="alert alert-danger" style={{ marginBottom: '1rem' }}>
             <ShieldAlert size={20} />
             <div>{error}</div>
           </div>
         )}
 
+        {success && (
+          <div className="alert alert-success" style={{ marginBottom: '1rem' }}>
+            <Check size={20} />
+            <div>{success}</div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div className="responsive-form-grid">
-            {/* Asset Name */}
+            {/* Common Asset Name */}
             <div className="form-group">
-              <label className="form-label">Asset Name *</label>
+              <label className="form-label">Common Asset Name *</label>
               <input
                 type="text"
                 className="form-control"
-                placeholder="e.g. Finance Server"
+                placeholder="e.g. Standard Developer Workstation"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={loading}
@@ -266,7 +211,7 @@ export default function AssetForm({ asset, users, token, onSave, onCancel }) {
               />
             </div>
 
-            {/* Asset Type */}
+            {/* Asset Category */}
             <div className="form-group">
               <label className="form-label">Asset Category *</label>
               <select
@@ -289,7 +234,7 @@ export default function AssetForm({ asset, users, token, onSave, onCancel }) {
               <input
                 type="text"
                 className="form-control"
-                placeholder="e.g. LOCAL PRINTER, MEDIUM, Kiosk"
+                placeholder="e.g. Laptop, Local Printer"
                 value={type}
                 onChange={(e) => setType(e.target.value)}
                 disabled={loading}
@@ -298,11 +243,11 @@ export default function AssetForm({ asset, users, token, onSave, onCancel }) {
 
             {/* Manufacturer Model */}
             <div className="form-group">
-              <label className="form-label">Model Number *</label>
+              <label className="form-label">Manufacturer Model *</label>
               <input
                 type="text"
                 className="form-control"
-                placeholder="e.g. PowerEdge R750"
+                placeholder="e.g. Dell Latitude 5440"
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
                 disabled={loading}
@@ -310,43 +255,29 @@ export default function AssetForm({ asset, users, token, onSave, onCancel }) {
               />
             </div>
 
-            {/* Serial Number (Physical asset tag linkage) */}
+            {/* Classification */}
             <div className="form-group">
-              <label className="form-label">Serial Number *</label>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="e.g. SN-889922-DEL"
-                value={serialNumber}
-                onChange={(e) => setSerialNumber(e.target.value)}
-                disabled={loading || isEdit} // Locks serial key in edit mode
-                required
-              />
-            </div>
-
-            {/* ISO 27001 Information Classification */}
-            <div className="form-group">
-              <label className="form-label">Information Security Classification *</label>
+              <label className="form-label">ISMS Classification *</label>
               <select
                 className="form-control"
                 value={classification}
                 onChange={(e) => setClassification(e.target.value)}
                 disabled={loading}
               >
-                <option value="PUBLIC">Public</option>
-                <option value="INTERNAL">Internal</option>
-                <option value="CONFIDENTIAL">Confidential</option>
+                <option value="PUBLIC">PUBLIC</option>
+                <option value="INTERNAL">INTERNAL</option>
+                <option value="CONFIDENTIAL">CONFIDENTIAL</option>
+                <option value="RESTRICTED">RESTRICTED</option>
               </select>
             </div>
 
-
-            {/* Physical Location */}
+            {/* Location */}
             <div className="form-group">
               <label className="form-label">Physical Location *</label>
               <input
                 type="text"
                 className="form-control"
-                placeholder="e.g. Mumbai DC, Rack 3-F"
+                placeholder="e.g. HQ Delhi - Floor 3"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 disabled={loading}
@@ -355,6 +286,7 @@ export default function AssetForm({ asset, users, token, onSave, onCancel }) {
             </div>
           </div>
 
+          {/* Category-Specific Form Fields */}
           {CATEGORY_SPECIFIC_FIELDS[category]?.length > 0 && (
             <>
               <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '1.5rem 0' }} />
@@ -364,7 +296,7 @@ export default function AssetForm({ asset, users, token, onSave, onCancel }) {
                   {findCategoryOption(category).label} Entry Details
                 </h4>
                 <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', margin: 0 }}>
-                  These category-specific fields are stored as additional asset metadata for the selected asset type.
+                  These details will be applied as custom specifications to all registered assets.
                 </p>
               </div>
 
@@ -388,68 +320,58 @@ export default function AssetForm({ asset, users, token, onSave, onCancel }) {
 
           <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '1.5rem 0' }} />
 
-          {/* Allocation Details */}
-          <h4 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--color-text-primary)' }}>
-            Asset Owner & Acceptable Use Controls (ISO 27001)
-          </h4>
-
-          <div className="responsive-form-grid responsive-form-grid--compact">
-            {/* Assign Employee */}
-            <div className="form-group">
-              <label className="form-label">Asset Assignee (Owner)</label>
-              <select
-                className="form-control"
-                value={ownerId}
-                onChange={(e) => handleOwnerChange(e.target.value)}
-                disabled={loading}
-              >
-                <option value="">Unassigned (Stored in Inventory Stock)</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} ({u.department})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Lifecycle Status */}
-            <div className="form-group">
-              <label className="form-label">Lifecycle Status</label>
-              <select
-                className="form-control"
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                disabled={loading}
-              >
-                <option value="PROCURED">Procured (In Stock)</option>
-                <option value="ALLOCATED">Allocated (Assigned)</option>
-                <option value="MAINTENANCE">Maintenance (Service)</option>
-                <option value="DISPOSED">Disposed (Decommissioned)</option>
-                <option value="LOST">Lost (Incident Triggered)</option>
-              </select>
+          {/* Allocation & Assignee */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.35rem', color: 'var(--color-text-primary)' }}>
+              Asset Assignee & Allocation
+            </h4>
+            <div className="responsive-form-grid" style={{ gridTemplateColumns: '1fr' }}>
+              <div className="form-group">
+                <label className="form-label">Asset Assignee (Optional)</label>
+                <select
+                  className="form-control"
+                  value={ownerId}
+                  onChange={(e) => setOwnerId(e.target.value)}
+                  disabled={loading}
+                >
+                  <option value="">-- UNASSIGNED (IN STOCK) --</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.email}) - {u.department}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* Acceptable Use Verification Checkbox */}
-          {ownerId && (
-            <div className="form-group" style={{ marginTop: '0.5rem', backgroundColor: 'var(--bg-tertiary)', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-              <label className="form-checkbox">
-                <input
-                  type="checkbox"
-                  checked={acceptableUseSigned}
-                  onChange={(e) => setAcceptableUseSigned(e.target.checked)}
-                  disabled={loading}
-                />
-                <span style={{ fontSize: '0.85rem', color: 'var(--color-text-primary)' }}>
-                  Confirm that the employee has signed the <strong>IT Acceptable Use Policy</strong>.
-                  (Required under ISO 27001 before allocating corporate equipment).
-                </span>
-              </label>
-            </div>
-          )}
+          <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '1.5rem 0' }} />
+
+          {/* Serial Numbers Textarea */}
+          <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+            <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Hardware Serial Numbers *</span>
+              <span className="badge badge-info" style={{ backgroundColor: 'var(--bg-badge-internal)', color: 'var(--color-text-primary)' }}>
+                Count: {serialCount}
+              </span>
+            </label>
+            <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginBottom: '0.5rem' }}>
+              Paste or enter serial numbers. Put exactly **one serial number per line**. We will generate an asset tag and record entry for each one.
+            </p>
+            <textarea
+              className="form-control"
+              rows={6}
+              placeholder="e.g.&#10;SN-82736152-X&#10;SN-82736153-Y&#10;SN-82736154-Z"
+              value={serialsText}
+              onChange={(e) => setSerialsText(e.target.value)}
+              disabled={loading}
+              style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}
+              required
+            ></textarea>
+          </div>
 
           {/* Actions */}
-          <div className="modal-actions">
+          <div className="modal-actions" style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '2rem' }}>
             <button
               type="button"
               className="btn btn-secondary"
@@ -463,7 +385,7 @@ export default function AssetForm({ asset, users, token, onSave, onCancel }) {
               className="btn btn-primary"
               disabled={loading}
             >
-              {loading ? 'Processing...' : isEdit ? 'Update Asset' : 'Register Asset'}
+              {loading ? 'Registering...' : `Bulk Register ${serialCount > 0 ? `(${serialCount} units)` : ''}`}
             </button>
           </div>
         </form>

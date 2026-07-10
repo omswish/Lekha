@@ -25,14 +25,60 @@ import LogReview from './components/LogReview';
 import AdministrativeRegisters from './components/AdministrativeRegisters';
 import DashboardView from './components/DashboardView';
 import ChatbotWidget from './components/ChatbotWidget';
+const ASSET_CATEGORY_LABELS = {
+  LAPTOP: 'Laptop',
+  DESKTOP: 'Desktop',
+  PRINTER: 'Printer',
+  MTR: 'MTR',
+  KIOSK: 'Kiosk',
+  SERVER: 'Server',
+  STORAGE: 'Storage',
+  TAPE_LIBRARY: 'Tape Library',
+  SWITCH: 'Switch',
+  ROUTER: 'Router',
+  FIREWALL: 'Firewall',
+  UPS: 'UPS',
+  ACCESS_POINT: 'Access Point',
+  VC_UNIT: 'VC Unit',
+  DATA_CARD: 'Data Card',
+  PROJECTOR: 'Projector',
+  CONSUMABLE: 'Consumable',
+  OTHER: 'Other'
+};
 
+function formatAssetCategory(asset) {
+  const categoryLabel = ASSET_CATEGORY_LABELS[asset.category] || asset.category || asset.type || 'Other';
+  if (asset.type && asset.type !== categoryLabel) {
+    return `${categoryLabel} (${asset.type})`;
+  }
+  return categoryLabel;
+}
 
+const INVENTORY_STATUS_FILTER_OPTIONS = [
+  { value: 'ACTIVE', label: 'Active / Allocated' },
+  { value: 'ALL', label: 'All Statuses' },
+  { value: 'INCOMPLETE', label: 'Incomplete Records' },
+  { value: 'ALLOCATED', label: 'Allocated' },
+  { value: 'PROCURED', label: 'Procured / Stock' },
+  { value: 'MAINTENANCE', label: 'Maintenance' },
+  { value: 'DISPOSED', label: 'Disposed' },
+  { value: 'LOST', label: 'Lost' }
+];
 
+const ACTIVE_ASSET_STATUSES = new Set(['ALLOCATED']);
 
-
-
-
-
+function matchesInventoryStatusFilter(asset, statusFilter) {
+  if (statusFilter === 'ALL') {
+    return true;
+  }
+  if (statusFilter === 'ACTIVE') {
+    return ACTIVE_ASSET_STATUSES.has(asset.status);
+  }
+  if (statusFilter === 'INCOMPLETE') {
+    return !!asset.isIncomplete;
+  }
+  return asset.status === statusFilter;
+}
 
 
 
@@ -77,7 +123,13 @@ export default function App() {
 
   // Modal displays
   const [showAssetForm, setShowAssetForm] = useState(false);
+  const [showBulkAssetForm, setShowBulkAssetForm] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState(null);
+
+  // Inventory filtering state
+  const [assetCategoryFilter, setAssetCategoryFilter] = useState('ALL');
+  const [assetStatusFilter, setAssetStatusFilter] = useState('ACTIVE');
+  const [assetSearchQuery, setAssetSearchQuery] = useState('');
 
   // Employee profile states (Right to Correction)
   const [profileData, setProfileData] = useState(null);
@@ -101,6 +153,10 @@ export default function App() {
     setUser(null);
     setProfileData(null);
     setAssets([]);
+    setAssetCategoryFilter('ALL');
+    setAssetStatusFilter('ACTIVE');
+    setAssetSearchQuery('');
+    setShowBulkAssetForm(false);
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('user');
   };
@@ -213,6 +269,37 @@ export default function App() {
       fetchProfile();
     }
   }, [token, activeTab]);
+
+  const availableAssetCategories = [
+    'ALL',
+    ...Array.from(new Set(assets.map(a => a.category).filter(Boolean))).sort()
+  ];
+
+  const normalizedSearch = assetSearchQuery.trim().toLowerCase();
+  const filteredAssets = assets.filter(asset => {
+    if (assetCategoryFilter !== 'ALL' && asset.category !== assetCategoryFilter) {
+      return false;
+    }
+    if (!matchesInventoryStatusFilter(asset, assetStatusFilter)) {
+      return false;
+    }
+    if (normalizedSearch) {
+      const text = [
+        asset.assetTag,
+        asset.name,
+        asset.model,
+        asset.serialNumber,
+        asset.status,
+        asset.location,
+        asset.type,
+        asset.category,
+        asset.owner?.name,
+        asset.owner?.department
+      ].filter(Boolean).join(' ').toLowerCase();
+      if (!text.includes(normalizedSearch)) return false;
+    }
+    return true;
+  });
 
   // Asset Decommissioning (Admin only)
   const handleDeleteAsset = async (id, tag) => {
@@ -664,13 +751,24 @@ export default function App() {
               </div>
 
               {(user.role === 'ADMIN' || user.role === 'ASSET_MANAGER') && (
-                <button 
-                  className="btn btn-primary"
-                  onClick={() => { setSelectedAsset(null); setShowAssetForm(true); }}
-                >
-                  <PlusCircle size={16} />
-                  Register Asset
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button 
+                    className="btn btn-secondary"
+                    onClick={() => { setShowBulkAssetForm(true); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                  >
+                    <Layers size={16} />
+                    Bulk Register
+                  </button>
+                  <button 
+                    className="btn btn-primary"
+                    onClick={() => { setSelectedAsset(null); setShowAssetForm(true); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                  >
+                    <PlusCircle size={16} />
+                    Register Asset
+                  </button>
+                </div>
               )}
             </div>
 
@@ -700,11 +798,83 @@ export default function App() {
               </div>
             </div>
 
+            <div className="card inventory-toolbar">
+              <div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                  Inventory Filter
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '0.2rem' }}>
+                  Showing {filteredAssets.length} of {assets.length} assets
+                </div>
+              </div>
+
+              <div className="inventory-toolbar-controls">
+                <div className="inventory-toolbar-control inventory-search-control">
+                  <label
+                    htmlFor="asset-search-filter"
+                    style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontWeight: 600 }}
+                  >
+                    Search
+                  </label>
+                  <input
+                    id="asset-search-filter"
+                    type="search"
+                    className="form-control"
+                    value={assetSearchQuery}
+                    onChange={(e) => setAssetSearchQuery(e.target.value)}
+                    placeholder="Search by tag, name, model, serial..."
+                  />
+                </div>
+
+                <div className="inventory-toolbar-control">
+                  <label
+                    htmlFor="asset-status-filter"
+                    style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontWeight: 600 }}
+                  >
+                    Status
+                  </label>
+                  <select
+                    id="asset-status-filter"
+                    className="form-control"
+                    value={assetStatusFilter}
+                    onChange={(e) => setAssetStatusFilter(e.target.value)}
+                  >
+                    {INVENTORY_STATUS_FILTER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="inventory-toolbar-control">
+                  <label
+                    htmlFor="asset-category-filter"
+                    style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontWeight: 600 }}
+                  >
+                    Category
+                  </label>
+                  <select
+                    id="asset-category-filter"
+                    className="form-control"
+                    value={assetCategoryFilter}
+                    onChange={(e) => setAssetCategoryFilter(e.target.value)}
+                  >
+                    {availableAssetCategories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat === 'ALL' ? 'All Categories' : (ASSET_CATEGORY_LABELS[cat] || cat)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
             {/* Asset Table */}
             <div className="table-container">
-              {assets.length === 0 ? (
+              {filteredAssets.length === 0 ? (
                 <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-                  No assets recorded in the database registry.
+                  No assets match the current search and filter selection.
                 </div>
               ) : (
                 <table className="data-table">
@@ -724,7 +894,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {assets.map((asset) => {
+                    {filteredAssets.map((asset) => {
                       const lastVerified = asset.lastVerifiedDate ? new Date(asset.lastVerifiedDate).toLocaleDateString('en-IN') : 'Never';
                       const nextDue = asset.nextVerificationDue ? new Date(asset.nextVerificationDue).toLocaleDateString('en-IN') : 'N/A';
                       const verificationOverdue = asset.nextVerificationDue && new Date(asset.nextVerificationDue) < new Date();
@@ -733,7 +903,7 @@ export default function App() {
                         <tr key={asset.id} style={{ borderLeft: verificationOverdue ? '3px solid var(--accent-danger)' : 'none' }}>
                           <td style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--color-text-primary)' }}>{asset.assetTag}</td>
                           <td style={{ fontWeight: 600 }}>{asset.name}</td>
-                          <td style={{ fontSize: '0.85rem' }}>{asset.type}</td>
+                          <td style={{ fontSize: '0.85rem' }}>{formatAssetCategory(asset)}</td>
                           <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{asset.serialNumber}</td>
                           <td>
                             <span className={`badge badge-${asset.classification.toLowerCase()}`}>
@@ -1059,6 +1229,16 @@ export default function App() {
           token={token}
           onSave={() => { setShowAssetForm(false); fetchInventoryData(); }}
           onCancel={() => setShowAssetForm(false)}
+        />
+      )}
+
+      {/* Bulk Asset Form Modal */}
+      {showBulkAssetForm && (
+        <BulkAssetForm
+          users={usersList}
+          token={token}
+          onSave={() => { setShowBulkAssetForm(false); fetchInventoryData(); }}
+          onCancel={() => setShowBulkAssetForm(false)}
         />
       )}
 

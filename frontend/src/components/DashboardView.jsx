@@ -25,6 +25,7 @@ export default function DashboardView({ token, user, setActiveTab }) {
     allocated_assets: { label: 'Assigned Devices', desc: 'Active assets currently allocated', icon: UserCheck, color: '#198754', roles: ['ADMIN', 'ASSET_MANAGER', 'EMPLOYEE'] },
     confidential_systems: { label: 'Confidential Systems', desc: 'High-security classified units', icon: ShieldCheck, color: '#dc3545', roles: ['ADMIN', 'ASSET_MANAGER'] },
     verification_overdue: { label: 'Audit Overdue Units', desc: 'Units needing physical verification', icon: ShieldAlert, color: '#e65f00', roles: ['ADMIN', 'ASSET_MANAGER'] },
+    incomplete_assets: { label: 'Incomplete Assets', desc: 'Assets containing Not Available fields', icon: AlertTriangle, color: '#ffc107', roles: ['ADMIN', 'ASSET_MANAGER'] },
     pending_requests: { label: 'Pending Access Requests', desc: 'Awaiting permission approval checks', icon: Clipboard, color: '#fd7e14', roles: ['ADMIN', 'ASSET_MANAGER'] },
     active_incidents: { label: 'Open Incidents', desc: 'Unresolved security incident logs', icon: AlertTriangle, color: '#dc3545', roles: ['ADMIN'] },
     backup_success: { label: 'Backup Success Rate', desc: 'Tested & verified recovery charts', icon: Database, color: '#198754', roles: ['ADMIN', 'ASSET_MANAGER'] },
@@ -42,9 +43,9 @@ export default function DashboardView({ token, user, setActiveTab }) {
   const [visibleCardKeys, setVisibleCardKeys] = useState(() => {
     // Default subset of cards
     if (user.role === 'ADMIN') {
-      return ['total_assets', 'allocated_assets', 'confidential_systems', 'verification_overdue', 'pending_requests', 'active_incidents'];
+      return ['total_assets', 'allocated_assets', 'confidential_systems', 'verification_overdue', 'incomplete_assets', 'pending_requests', 'active_incidents'];
     } else if (user.role === 'ASSET_MANAGER') {
-      return ['total_assets', 'allocated_assets', 'verification_overdue', 'backup_success', 'patch_installed', 'vendor_count'];
+      return ['total_assets', 'allocated_assets', 'verification_overdue', 'incomplete_assets', 'backup_success', 'patch_installed', 'vendor_count'];
     } else {
       return ['allocated_assets', 'training_completed', 'dpdp_consent'];
     }
@@ -90,6 +91,7 @@ export default function DashboardView({ token, user, setActiveTab }) {
       case 'allocated_assets': return metrics.allocatedAssets;
       case 'confidential_systems': return metrics.criticalAssets;
       case 'verification_overdue': return metrics.unverifiedAssets;
+      case 'incomplete_assets': return metrics.incompleteAssets;
       case 'pending_requests': return metrics.pendingRequests;
       case 'active_incidents': return metrics.activeIncidents;
       case 'backup_success': return `${metrics.backupRate}%`;
@@ -168,7 +170,9 @@ export default function DashboardView({ token, user, setActiveTab }) {
                 }}
                 onClick={() => {
                   // Link card clicks to relevant tabs
-                  if (key === 'total_assets' || key === 'allocated_assets' || key === 'confidential_systems' || key === 'verification_overdue') {
+                  if (key === 'incomplete_assets') {
+                    setActiveTab('inventory', 'INCOMPLETE');
+                  } else if (key === 'total_assets' || key === 'allocated_assets' || key === 'confidential_systems' || key === 'verification_overdue') {
                     setActiveTab('inventory');
                   } else if (key === 'pending_requests') {
                     setActiveTab('registers'); // Access requests tab

@@ -4,6 +4,11 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate, requireRole } = require('../middleware/auth');
 const auditLogger = require('../middleware/auditLogger');
+const {
+  getAssetCategoryCode,
+  getDefaultAssetType,
+  normalizeAssetCategory
+} = require('../utils/assetCatalog');
 
 // Create Express Router for assets
 const router = express.Router();
@@ -11,26 +16,19 @@ const router = express.Router();
 // Initialize Prisma Client
 const prisma = new PrismaClient();
 
-/**
- * Helper utility to map asset type categories to the standard 2-letter codes.
- * Governed by PRO 06 Assets Management Process (Section 6.1).
- * 
- * @param {string} type - Raw type string (e.g. Laptop, Server, Firewall)
- * @returns {string} 2-letter uppercase type code (e.g. LT, SE, FW)
- */
-function getAssetTypeCode(type) {
-  const mapping = {
-    'Laptop': 'LT',
-    'Desktop': 'DT',
-    'Printer': 'PR',
-    'Server': 'SE',
-    'Storage': 'ST',
-    'Tape Library': 'TL',
-    'Switch': 'SW',
-    'Router': 'RT',
-    'Firewall': 'FW'
-  };
-  return mapping[type] || (type ? type.substring(0, 2).toUpperCase() : 'IT');
+function sanitizeCustomFields(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return null;
+  }
+
+  return Object.entries(input).reduce((result, [key, value]) => {
+    if (typeof key !== 'string') {
+      return result;
+    }
+
+    result[key] = value;
+    return result;
+  }, {});
 }
 
 /**
@@ -101,20 +99,124 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 /**
- * @route   POST /api/assets
- * @desc    Registers a new IT asset in the inventory (PRO 06 & POL 09 labeling compliance).
+ * @route   POST /api/assets/bulk
+ * @desc    Registers multiple IT assets in bulk sharing model, make, PO details but having different serial numbers.
  * @access  Private (Admins and Asset Managers only)
  */
+router.post(
+  '/bulk',
+  authenticate,
+  requireRole(['ADMIN', 'ASSET_MANAGER']),
+  auditLogger('ASSET_MANAGEMENT_BULK'),
+  async (req, res) => {
+    const { name, category, type, model, serialNumbers, classification, location, customFields, ownerId } = req.body;
+    const assetCategory = normalizeAssetCategory(category || type);
+    const assetType = String(type || '').trim() || getDefaultAssetType(assetCategory);
+    const sanitizedCustomFields = sanitizeCustomFields(customFields) || {};
+
+    if (!name || !model || !location || !(category || type) || !Array.isArray(serialNumbers) || serialNumbers.length === 0) {
+      return res.status(400).json({ error: 'Missing required bulk asset registration fields or serial numbers.' });
+    }
+
+    try {
+      // 1. Sanitize & filter serial numbers
+      const cleanSerials = serialNumbers.map(s => String(s || '').trim()).filter(Boolean);
+      if (cleanSerials.length === 0) {
+        return res.status(400).json({ error: 'No valid hardware serial numbers provided.' });
+      }
+
+      // 2. Check for duplicate serial numbers within the list
+      const uniqueSerials = [...new Set(cleanSerials)];
+      if (uniqueSerials.length !== cleanSerials.length) {
+        return res.status(400).json({ error: 'Duplicate serial numbers detected in the input list.' });
+      }
+
+      // 3. Check if any serial number already exists in the database
+      const existing = await prisma.asset.findMany({
+        where: { serialNumber: { in: cleanSerials } },
+        select: { serialNumber: true }
+      });
+      if (existing.length > 0) {
+        const dupes = existing.map(e => e.serialNumber).join(', ');
+        return res.status(400).json({ error: `The following serial numbers already exist in the registry: ${dupes}` });
+      }
+
+      // 4. Determine if there is incomplete data
+      const hasMissingCore = !name || !model || !location;
+      const hasMissingCustom = Object.values(sanitizedCustomFields).some(v => v === '' || v === 'Not Available');
+      const isIncomplete = hasMissingCore || hasMissingCustom;
+
+      // 5. Generate tags and insert in a transaction
+      const typeCode = getAssetCategoryCode(assetCategory);
+      const assetTagPrefix = `UAIL/IT/${typeCode}/`;
+      
+      const results = await prisma.$transaction(async (tx) => {
+        const count = await tx.asset.count({
+          where: { assetTag: { startsWith: assetTagPrefix } }
+        });
+
+        const createdAssets = [];
+        for (let idx = 0; idx < cleanSerials.length; idx++) {
+          const serial = cleanSerials[idx];
+          const paddedCount = String(count + idx + 1).padStart(4, '0');
+          const assetTag = `${assetTagPrefix}${paddedCount}`;
+
+          const newAsset = await tx.asset.create({
+            data: {
+              assetTag,
+              name,
+              category: assetCategory,
+              type: assetType,
+              model,
+              serialNumber: serial,
+              classification: classification || 'INTERNAL',
+              status: ownerId ? 'ALLOCATED' : 'PROCURED',
+              location,
+              customFields: sanitizedCustomFields,
+              ownerId: ownerId || null,
+              acceptableUseSigned: !!ownerId,
+              signOffDate: ownerId ? new Date() : null,
+              lastVerifiedDate: new Date(),
+              nextVerificationDue: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+              isIncomplete
+            }
+          });
+
+          await tx.assetHistory.create({
+            data: {
+              assetId: newAsset.id,
+              action: 'PROCURED',
+              performedBy: req.user.email,
+              description: `Bulk asset registered. Generated tag ${assetTag}.`
+            }
+          });
+
+          createdAssets.push(newAsset);
+        }
+        return createdAssets;
+      });
+
+      res.status(201).json({ message: `Successfully registered ${results.length} assets in bulk.`, assets: results });
+    } catch (error) {
+      console.error('Bulk registration error:', error);
+      res.status(500).json({ error: 'Failed to complete bulk asset registration.' });
+    }
+  }
+);
+
 router.post(
   '/',
   authenticate,
   requireRole(['ADMIN', 'ASSET_MANAGER']),
   auditLogger('ASSET_MANAGEMENT'),
   async (req, res) => {
-    const { name, type, model, serialNumber, classification, location } = req.body;
+    const { name, category, type, model, serialNumber, classification, location, customFields } = req.body;
+    const assetCategory = normalizeAssetCategory(category || type);
+    const assetType = String(type || '').trim() || getDefaultAssetType(assetCategory);
+    const sanitizedCustomFields = sanitizeCustomFields(customFields);
 
     // Validate request inputs
-    if (!name || !type || !model || !serialNumber || !location) {
+    if (!name || !model || !serialNumber || !location || !(category || type)) {
       return res.status(400).json({ error: 'Missing required asset registration fields.' });
     }
 
@@ -129,12 +231,17 @@ router.post(
 
       // 2. Auto-generate a compliant corporate Asset Tag label (PRO 06 Section 6.1)
       // Format: UAIL/IT/[AssetType]/nnnn
-      const typeCode = getAssetTypeCode(type);
+      const typeCode = getAssetCategoryCode(assetCategory);
+      const assetTagPrefix = `UAIL/IT/${typeCode}/`;
       const count = await prisma.asset.count({
-        where: { type }
+        where: {
+          assetTag: {
+            startsWith: assetTagPrefix
+          }
+        }
       });
       const paddedCount = String(count + 1).padStart(4, '0');
-      const assetTag = `UAIL/IT/${typeCode}/${paddedCount}`;
+      const assetTag = `${assetTagPrefix}${paddedCount}`;
 
       // 3. Create asset inside a database transaction
       const asset = await prisma.$transaction(async (tx) => {
@@ -142,12 +249,14 @@ router.post(
           data: {
             assetTag,
             name,
-            type,
+            category: assetCategory,
+            type: assetType,
             model,
             serialNumber,
             classification: classification || 'INTERNAL',
             status: 'PROCURED',
             location,
+            customFields: sanitizedCustomFields,
             acceptableUseSigned: false,
             lastVerifiedDate: new Date(), // Verification tracks initialized (PRO 06)
             nextVerificationDue: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365) // 1 year cycle
@@ -190,9 +299,10 @@ router.put(
   async (req, res) => {
     const { id } = req.params;
     const { 
-      name, type, model, classification, status, location, ownerId, 
-      acceptableUseSigned, verifyAction 
+      name, category, type, model, classification, status, location, ownerId,
+      acceptableUseSigned, verifyAction, customFields
     } = req.body;
+    const sanitizedCustomFields = sanitizeCustomFields(customFields);
 
     try {
       // 1. Verify asset existence
@@ -208,13 +318,38 @@ router.put(
       const updatedAsset = await prisma.$transaction(async (tx) => {
         let historyNotes = [];
         let dataUpdates = {};
+        const currentCategory = normalizeAssetCategory(currentAsset.category || currentAsset.type);
+        const nextCategory = category ? normalizeAssetCategory(category) : currentCategory;
 
         // A. Handle standard asset metadata edits
         if (name) dataUpdates.name = name;
-        if (type) dataUpdates.type = type;
         if (model) dataUpdates.model = model;
         if (classification) dataUpdates.classification = classification;
         if (location) dataUpdates.location = location;
+        if (category && nextCategory !== currentCategory) {
+          dataUpdates.category = nextCategory;
+          historyNotes.push(`Category changed from ${currentCategory} to ${nextCategory}.`);
+        }
+        if (sanitizedCustomFields) {
+          dataUpdates.customFields = {
+            ...(currentAsset.customFields && typeof currentAsset.customFields === 'object' ? currentAsset.customFields : {}),
+            ...sanitizedCustomFields
+          };
+          historyNotes.push(`Category-specific asset details updated.`);
+        }
+        if (type !== undefined) {
+          const nextType = String(type || '').trim() || getDefaultAssetType(nextCategory);
+          if (nextType !== currentAsset.type) {
+            dataUpdates.type = nextType;
+            historyNotes.push(`Subtype changed from ${currentAsset.type} to ${nextType}.`);
+          }
+        } else if (
+          category &&
+          currentAsset.type === getDefaultAssetType(currentCategory) &&
+          getDefaultAssetType(nextCategory) !== currentAsset.type
+        ) {
+          dataUpdates.type = getDefaultAssetType(nextCategory);
+        }
 
         // B. Check if status is transitioning (e.g. ALLOCATED -> MAINTENANCE)
         if (status && status !== currentAsset.status) {

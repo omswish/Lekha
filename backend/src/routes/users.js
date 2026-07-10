@@ -59,6 +59,7 @@ router.get('/profile', authenticate, async (req, res) => {
             id: true,
             assetTag: true,
             name: true,
+            category: true,
             type: true,
             classification: true,
             status: true,

@@ -2,9 +2,25 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate } = require('../middleware/auth');
+const {
+  normalizeAssetCategory,
+  normalizeAssetStatus,
+  getAssetCategoryLabel
+} = require('../utils/assetCatalog');
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+// Clean up keys for display
+function sanitizeRecord(record) {
+  if (!record) return null;
+  const result = { ...record };
+  delete result.id;
+  delete result.ownerId;
+  delete result.createdAt;
+  delete result.updatedAt;
+  return result;
+}
 
 /**
  * @route   POST /api/chatbot/message
@@ -17,37 +33,185 @@ router.post('/message', authenticate, async (req, res) => {
     return res.status(400).json({ error: 'Message content cannot be empty.' });
   }
 
-  const query = String(message).toLowerCase().trim();
+  const rawQuery = String(message).trim();
+  const query = rawQuery.toLowerCase();
   let reply = '';
   let data = null;
+  let action = null;
 
   try {
     // -----------------------------------------------------------------
-    // INTENT 1: ASSET INVENTORY QUERIES
+    // 1. EXTRACT ASSET TAG (Pattern: UAIL/IT/XX/NNNN or UAIL/MIGRATE/XX/NNNN)
     // -----------------------------------------------------------------
-    if ((query.includes('asset') || query.includes('device') || query.includes('hardware')) && 
-        (query.includes('how many') || query.includes('count') || query.includes('total') || query.includes('list'))) {
-      
-      const count = await prisma.asset.count();
-      const confidential = await prisma.asset.count({ where: { classification: 'CONFIDENTIAL' } });
-      reply = `There are currently **${count}** IT assets registered in the database inventory (including **${confidential}** classified as CONFIDENTIAL).`;
-      
-      // If user wants details or list, fetch the first few assets
-      if (query.includes('list') || query.includes('show') || query.includes('detail')) {
-        const list = await prisma.asset.findMany({ take: 5, select: { assetTag: true, name: true, status: true } });
-        data = list;
-        reply += ` Here are the latest registered assets:`;
+    const tagMatch = query.match(/uail\/[a-z0-9\/]+/);
+    if (tagMatch) {
+      const targetTag = tagMatch[0].toUpperCase();
+      const asset = await prisma.asset.findUnique({
+        where: { assetTag: targetTag },
+        include: { owner: { select: { name: true, department: true, email: true } } }
+      });
+
+      if (asset) {
+        reply = `Found details for asset **${targetTag}** (**${asset.name}**):`;
+        data = sanitizeRecord({
+          ...asset,
+          owner: asset.owner ? `${asset.owner.name} (${asset.owner.department})` : 'Stock (Unassigned)',
+          customFields: asset.customFields ? JSON.stringify(asset.customFields) : 'None'
+        });
+        return res.json({ reply, data });
+      } else {
+        reply = `I identified asset tag **${targetTag}** in your query, but could not find it in the active registry.`;
+        return res.json({ reply });
       }
     }
+
+    // -----------------------------------------------------------------
+    // 2. EXTRACT SERIAL NUMBER (Scan words for potential matches in database)
+    // -----------------------------------------------------------------
+    const words = query.split(/[^a-z0-9\-]+/);
+    for (const word of words) {
+      if (word.length >= 6) {
+        const assetBySerial = await prisma.asset.findUnique({
+          where: { serialNumber: word.toUpperCase() },
+          include: { owner: { select: { name: true, department: true } } }
+        });
+        if (assetBySerial) {
+          reply = `Found asset match by Serial Number **${word.toUpperCase()}** (**${assetBySerial.name}**):`;
+          data = sanitizeRecord({
+            ...assetBySerial,
+            owner: assetBySerial.owner ? `${assetBySerial.owner.name} (${assetBySerial.owner.department})` : 'Stock'
+          });
+          return res.json({ reply, data });
+        }
+      }
+    }
+
+    // -----------------------------------------------------------------
+    // 3. NAVIGATION TRIGGERS (Redirect user to tab in front-end)
+    // -----------------------------------------------------------------
+    if (query.includes('navigate') || query.includes('go to') || query.includes('show tab') || query.includes('open tab') || query.includes('view tab')) {
+      if (query.includes('profile') || query.includes('consent') || query.includes('erasure')) {
+        reply = 'Navigating you to **My Profile & Consent** view.';
+        action = { type: 'NAVIGATE', tab: 'profile' };
+        return res.json({ reply, action });
+      }
+      if (query.includes('inventory') || query.includes('asset') || query.includes('device') || query.includes('hardware')) {
+        reply = 'Opening **Asset Inventory** register.';
+        action = { type: 'NAVIGATE', tab: 'inventory' };
+        return res.json({ reply, action });
+      }
+      if (query.includes('document') || query.includes('policy') || query.includes('dcn')) {
+        reply = 'Opening **Controlled Documents** register.';
+        action = { type: 'NAVIGATE', tab: 'documents' };
+        return res.json({ reply, action });
+      }
+      if (query.includes('task') || query.includes('check-off') || query.includes('calendar') || query.includes('evidence')) {
+        reply = 'Opening your **Compliance Tasks** checklist.';
+        action = { type: 'NAVIGATE', tab: 'tasks' };
+        return res.json({ reply, action });
+      }
+      if (query.includes('non-conformance') || query.includes('ncr') || query.includes('car')) {
+        reply = 'Opening the **Non-Conformances** ledgers.';
+        action = { type: 'NAVIGATE', tab: 'conformances' };
+        return res.json({ reply, action });
+      }
+      if (query.includes('ropa') || query.includes('privacy')) {
+        reply = 'Opening the **RoPA Registry** tab.';
+        action = { type: 'NAVIGATE', tab: 'ropa' };
+        return res.json({ reply, action });
+      }
+      if (query.includes('audit logs') || query.includes('cert-in logs') || query.includes('audit history')) {
+        reply = 'Opening **CERT-In Audit Logs** tab.';
+        action = { type: 'NAVIGATE', tab: 'audit-logs' };
+        return res.json({ reply, action });
+      }
+    }
+
+    // -----------------------------------------------------------------
+    // 4. INCOMPLETE DATA INQUIRIES
+    // -----------------------------------------------------------------
+    if (query.includes('incomplete') || query.includes('missing field') || query.includes('missing data') || query.includes('verification needed')) {
+      const count = await prisma.asset.count({ where: { isIncomplete: true } });
+      reply = `There are currently **${count}** assets marked as having **incomplete data** (records with missing attributes or 'Not Available' status).`;
+      if (count > 0) {
+        const list = await prisma.asset.findMany({
+          where: { isIncomplete: true },
+          take: 3,
+          select: { assetTag: true, name: true, category: true, location: true }
+        });
+        data = list;
+        reply += ` Here are a few examples that need verification:`;
+        action = { type: 'NAVIGATE', tab: 'inventory' }; // Navigate to list
+      }
+      return res.json({ reply, data, action });
+    }
+
+    // -----------------------------------------------------------------
+    // 5. ASSET CATEGORY COUNTS AND LISTS
+    // -----------------------------------------------------------------
+    const categories = ['LAPTOP', 'DESKTOP', 'PRINTER', 'MTR', 'KIOSK', 'SERVER', 'STORAGE', 'TAPE_LIBRARY', 'SWITCH', 'ROUTER', 'FIREWALL', 'UPS', 'ACCESS_POINT', 'VC_UNIT', 'DATA_CARD', 'PROJECTOR', 'CONSUMABLE'];
+    let detectedCategory = null;
     
+    for (const cat of categories) {
+      const label = getAssetCategoryLabel(cat).toLowerCase();
+      if (query.includes(label) || query.includes(label + 's')) {
+        detectedCategory = cat;
+        break;
+      }
+    }
+
+    if (detectedCategory) {
+      const count = await prisma.asset.count({ where: { category: detectedCategory } });
+      const label = getAssetCategoryLabel(detectedCategory);
+      reply = `We have **${count}** registered **${label}** asset(s) in the database register.`;
+      
+      if (query.includes('list') || query.includes('show') || query.includes('detail') || query.includes('find')) {
+        const list = await prisma.asset.findMany({
+          where: { category: detectedCategory },
+          take: 5,
+          select: { assetTag: true, name: true, model: true, status: true, location: true }
+        });
+        data = list;
+        reply += ` Here are the latest registered ${label} units:`;
+      }
+      return res.json({ reply, data });
+    }
+
     // -----------------------------------------------------------------
-    // INTENT 2: VERIFICATION OVERDUE
+    // 6. ASSETS BY LOCATION
     // -----------------------------------------------------------------
-    else if (query.includes('overdue') || query.includes('unverified') || query.includes('due')) {
+    if (query.includes('located') || query.includes('location') || query.includes('in delhi') || query.includes('in mumbai') || query.includes('in office')) {
+      // Find matching location keywords
+      let searchLocation = '';
+      if (query.includes('delhi')) searchLocation = 'delhi';
+      else if (query.includes('mumbai')) searchLocation = 'mumbai';
+      else if (query.includes('hq')) searchLocation = 'hq';
+      else if (query.includes('server room')) searchLocation = 'server room';
+
+      if (searchLocation) {
+        const count = await prisma.asset.count({
+          where: { location: { contains: searchLocation, mode: 'insensitive' } }
+        });
+        reply = `Found **${count}** asset(s) located in/at **${searchLocation.toUpperCase()}**:`;
+        
+        const list = await prisma.asset.findMany({
+          where: { location: { contains: searchLocation, mode: 'insensitive' } },
+          take: 5,
+          select: { assetTag: true, name: true, model: true, location: true }
+        });
+        data = list;
+        return res.json({ reply, data });
+      }
+    }
+
+    // -----------------------------------------------------------------
+    // 7. VERIFICATION OVERDUE ASSETS
+    // -----------------------------------------------------------------
+    if (query.includes('overdue') || query.includes('unverified') || query.includes('due') || query.includes('expired')) {
       const count = await prisma.asset.count({
         where: { nextVerificationDue: { lt: new Date() } }
       });
-      reply = `There are **${count}** assets overdue for physical verification audit checks (ISO 27001 Control A.5.9 compliance).`;
+      reply = `There are **${count}** assets currently overdue for physical verification checks (compliance under annual verification policy PRO 06).`;
       if (count > 0) {
         const list = await prisma.asset.findMany({
           where: { nextVerificationDue: { lt: new Date() } },
@@ -57,12 +221,13 @@ router.post('/message', authenticate, async (req, res) => {
         data = list;
         reply += ` Overdue assets include:`;
       }
+      return res.json({ reply, data });
     }
 
     // -----------------------------------------------------------------
-    // INTENT 3: MY ALLOCATED DEVICES
+    // 8. MY ALLOCATED DEVICES
     // -----------------------------------------------------------------
-    else if (query.includes('my asset') || query.includes('assigned to me') || query.includes('allocated to me') || query.includes('my device')) {
+    if (query.includes('my asset') || query.includes('assigned to me') || query.includes('allocated to me') || query.includes('my device') || query.includes('my laptop')) {
       const list = await prisma.asset.findMany({
         where: { owner: { email: req.user.email } },
         select: { assetTag: true, name: true, status: true, lastVerifiedDate: true }
@@ -73,12 +238,13 @@ router.post('/message', authenticate, async (req, res) => {
         reply = `You have **${list.length}** device(s) allocated to your profile:`;
         data = list;
       }
+      return res.json({ reply, data });
     }
 
     // -----------------------------------------------------------------
-    // INTENT 4: PENDING ACCESS REQUESTS
+    // 9. PENDING ACCESS REQUESTS
     // -----------------------------------------------------------------
-    else if (query.includes('pending request') || query.includes('access request') || query.includes('approvals')) {
+    if (query.includes('pending request') || query.includes('access request') || query.includes('approvals')) {
       const count = await prisma.accessRequest.count({ where: { status: 'PENDING' } });
       reply = `There are currently **${count}** access requests pending authorization checks.`;
       if (count > 0) {
@@ -90,12 +256,13 @@ router.post('/message', authenticate, async (req, res) => {
         data = list;
         reply += ` Pending requests list:`;
       }
+      return res.json({ reply, data });
     }
 
     // -----------------------------------------------------------------
-    // INTENT 5: BACKUP & RESTORATION
+    // 10. BACKUP & RESTORATION STATUS
     // -----------------------------------------------------------------
-    else if (query.includes('backup') || query.includes('restoration') || query.includes('recovery')) {
+    if (query.includes('backup') || query.includes('restoration') || query.includes('recovery')) {
       const list = await prisma.backupRegister.findMany({
         take: 3,
         orderBy: { createdAt: 'desc' },
@@ -103,95 +270,23 @@ router.post('/message', authenticate, async (req, res) => {
       });
       reply = `Here is the status of the latest backup registries (FMT 35/36 compliance):`;
       data = list;
+      return res.json({ reply, data });
     }
 
     // -----------------------------------------------------------------
-    // INTENT 6: SERVER PATCH STATUS
+    // FALLBACK / GENERAL HELP
     // -----------------------------------------------------------------
-    else if (query.includes('patch') || query.includes('vulnerability') || query.includes('cve')) {
-      const list = await prisma.patchAuditLog.findMany({
-        take: 3,
-        orderBy: { createdAt: 'desc' },
-        select: { serverName: true, patchId: true, status: true, criticality: true }
-      });
-      reply = `Here are the latest OS patch installation records (FMT 26 compliance):`;
-      data = list;
-    }
-
-    // -----------------------------------------------------------------
-    // INTENT 7: SUPPLIER AUDITING
-    // -----------------------------------------------------------------
-    else if (query.includes('supplier') || query.includes('vendor')) {
-      const count = await prisma.supplierRecord.count();
-      reply = `There are **${count}** registered third-party suppliers (PRO 23).`;
-      const list = await prisma.supplierRecord.findMany({
-        take: 3,
-        select: { supplierName: true, serviceProvided: true }
-      });
-      data = list;
-      reply += ` Active suppliers include:`;
-    }
-
-    // -----------------------------------------------------------------
-    // INTENT 8: LATEST MRM MINUTES
-    // -----------------------------------------------------------------
-    else if (query.includes('mrm') || query.includes('meeting') || query.includes('minutes')) {
-      const entry = await prisma.managementReview.findFirst({
-        orderBy: { meetingDate: 'desc' }
-      });
-      if (!entry) {
-        reply = `No Management Review Meetings (FMT 15) are logged in the compliance database.`;
-      } else {
-        reply = `Here are the minutes of the latest MRM meeting (**${entry.meetingCode}**):`;
-        data = {
-          agenda: entry.agenda,
-          discussionPoints: entry.discussionPoints,
-          actionItems: entry.actionItems,
-          meetingDate: entry.meetingDate
-        };
-      }
-    }
-
-    // -----------------------------------------------------------------
-    // INTENT 9: NAVIGATION ASSISTANCE
-    // -----------------------------------------------------------------
-    else if (query.includes('profile') || query.includes('consent') || query.includes('anonymize') || query.includes('erasure')) {
-      reply = `To manage your profile settings, spelling corrections (DPDP Section 11), consent declarations, or Right to Erasure account purges (DPDP Section 12), select the **'My Profile & Consent'** tab in the sidebar.`;
-    } 
-    else if (query.includes('register asset') || query.includes('add asset') || query.includes('create asset')) {
-      reply = `To onboard a new asset, navigate to the **'Asset Inventory'** tab and click the dark orange **'Register Asset'** button at the top right of the page (Admin/Manager permissions required).`;
-    } 
-    else if (query.includes('document') || query.includes('policy') || query.includes('dcn')) {
-      reply = `To review controlled ISMS files or log Document Change Notes (FMT 04), navigate to the **'Controlled Documents'** tab in the sidebar.`;
-    } 
-    else if (query.includes('task') || query.includes('calendar') || query.includes('evidence')) {
-      reply = `To sign off compliance check-offs, verify calendars, or upload audit evidence files, open the **'Compliance Tasks'** tab in the sidebar.`;
-    } 
-    else if (query.includes('ncr') || query.includes('non-conformance') || query.includes('car')) {
-      reply = `To log compliance non-conformances (FMT 13) or corrective action closures (FMT 14), navigate to the **'Non-Conformances'** tab.`;
-    } 
-    else if (query.includes('ropa') || query.includes('privacy')) {
-      reply = `To declare information processing mappings, view the Record of Processing Activities (RoPA) register tab.`;
-    } 
-    else if (query.includes('audit logs') || query.includes('cert-in logs') || query.includes('history')) {
-      reply = `To audit platform activity or download compliance CSV exports (CERT-In 180-day retention rules), open the **'CERT-In Audit Logs'** tab (Admin only).`;
-    }
-
-    // -----------------------------------------------------------------
-    // FALLBACK / DEFAULT
-    // -----------------------------------------------------------------
-    else {
-      reply = `Hello! I am your compliance assistant. I can query the database directly or help you navigate. Try asking:\n\n` +
-              `• "How many assets are registered?"\n` +
-              `• "Are there any overdue verifications?"\n` +
-              `• "Show my allocated assets"\n` +
-              `• "What is our latest backup status?"\n` +
-              `• "What is the patch update status?"\n` +
-              `• "Where do I find the non-conformances ledger?"`;
-    }
-
-    res.json({ reply, data });
+    reply = `Hello! I am your compliance assistant. I can query the database directly or help you navigate. Try asking:\n\n` +
+            `• "Search asset UAIL/IT/LT/0001"\n` +
+            `• "How many laptops do we have?"\n` +
+            `• "Show unverified or overdue assets"\n` +
+            `• "List assets in Delhi office"\n` +
+            `• "Show my allocated assets"\n` +
+            `• "Open controlled documents tab"`;
+    
+    res.json({ reply });
   } catch (error) {
+    console.error('Chatbot error:', error);
     res.status(500).json({ error: 'Failed to process chatbot request.' });
   }
 });

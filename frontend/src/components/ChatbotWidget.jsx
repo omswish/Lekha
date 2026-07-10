@@ -66,6 +66,9 @@ export default function ChatbotWidget({ token, setActiveTab }) {
           text: data.reply, 
           recordData: data.data 
         }]);
+        if (data.action && data.action.type === 'NAVIGATE') {
+          setActiveTab(data.action.tab);
+        }
       } else {
         setMessages(prev => [...prev, { 
           id: botMsgId, 

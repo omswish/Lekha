@@ -78,7 +78,9 @@ button, input, select, textarea {
 /* The primary outer container after authentication */
 .app-container {
   display: flex;
-  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  overflow-x: clip;
 }
 
 /* Sidebar navigation */
@@ -94,6 +96,7 @@ button, input, select, textarea {
   left: 0;
   top: 0;
   z-index: 10;
+  overflow-y: auto;
 }
 
 /* Main content workspace */
@@ -101,10 +104,42 @@ button, input, select, textarea {
   flex: 1;
   margin-left: var(--sidebar-width);
   padding: 2.5rem;
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   background-color: var(--bg-primary);
+  min-width: 0;
+  width: calc(100% - var(--sidebar-width));
+  max-width: calc(100vw - var(--sidebar-width));
+}
+
+.inventory-toolbar {
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.inventory-toolbar-controls {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.8fr) repeat(2, minmax(180px, 1fr));
+  gap: 0.75rem;
+  width: min(100%, 860px);
+}
+
+.inventory-toolbar-control {
+  min-width: 0;
+}
+
+.inventory-toolbar-control label {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.inventory-toolbar-control .form-control {
+  width: 100%;
 }
 
 /* =========================================================================
@@ -185,6 +220,8 @@ button, input, select, textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .page-title {
@@ -251,13 +288,17 @@ button, input, select, textarea {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   box-shadow: var(--shadow-md);
   margin-bottom: 2rem;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 .data-table {
   width: 100%;
+  min-width: 1100px;
   border-collapse: collapse;
   text-align: left;
 }
@@ -466,6 +507,7 @@ button, input, select, textarea {
   justify-content: center;
   z-index: 100;
   padding: 1.5rem;
+  overflow-y: auto;
 }
 
 .modal-content {
@@ -474,7 +516,8 @@ button, input, select, textarea {
   border-radius: 16px;
   width: 100%;
   max-width: 600px;
-  max-height: 90vh;
+  max-height: min(90dvh, calc(100dvh - 2rem));
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 2rem;
   box-shadow: var(--shadow-lg);
@@ -485,6 +528,8 @@ button, input, select, textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
   margin-bottom: 1.5rem;
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 1rem;
@@ -578,4 +623,123 @@ button, input, select, textarea {
   width: 100%;
   height: 2px;
   background-color: var(--accent-primary);
+}
+
+.responsive-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.responsive-form-grid--compact {
+  align-items: center;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1180px) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    position: relative;
+    width: 100%;
+    height: auto;
+    max-height: none;
+    padding: 1.25rem 1rem;
+  }
+
+  .sidebar-logo {
+    margin-bottom: 1.25rem;
+  }
+
+  .nav-links {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.5rem;
+  }
+
+  .nav-item:hover,
+  .nav-item.active {
+    transform: none;
+  }
+
+  .user-badge {
+    margin-top: 1rem;
+    padding-top: 1rem;
+  }
+
+  .main-content {
+    margin-left: 0;
+    width: 100%;
+    max-width: 100%;
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+
+  .responsive-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .modal-content {
+    padding: 1.25rem;
+  }
+
+  .inventory-toolbar-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    padding: 1rem;
+  }
+
+  .page-title {
+    font-size: 1.4rem;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 0.85rem 0.9rem;
+  }
+
+  .auth-card {
+    padding: 1.5rem;
+  }
+
+  .modal-overlay {
+    padding: 0.75rem;
+    align-items: flex-start;
+  }
+
+  .modal-content {
+    max-height: calc(100dvh - 1.5rem);
+    border-radius: 14px;
+  }
+
+  .modal-actions .btn {
+    width: 100%;
+  }
+
+  .inventory-toolbar-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

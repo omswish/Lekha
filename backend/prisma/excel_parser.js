@@ -2,6 +2,11 @@
 const fs = require('fs');
 const path = require('path');
 const XLSX = require('xlsx');
+const {
+  getDefaultAssetType,
+  normalizeAssetCategory,
+  normalizeAssetStatus
+} = require('../src/utils/assetCatalog');
 
 const formatsDir = 'C:/Users/omkar.s/Code/cli-test1/ISO_docs/Formats';
 
@@ -173,6 +178,7 @@ async function parseAndSeedExcel(prisma, adminUser, employeeUser, managerUser) {
         if (!wb.SheetNames.includes(sheetName)) continue;
         const sheet = wb.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        const category = normalizeAssetCategory(sheetName);
         
         const headerIdx = findHeaderRowIndex(rows, ['IT ASSET TAG', 'SERIAL NO', 'LOCATION', 'MAKE', 'MODEL']);
         const mapped = mapExcelRows(rows, headerIdx, {
@@ -203,17 +209,19 @@ async function parseAndSeedExcel(prisma, adminUser, employeeUser, managerUser) {
             data: {
               assetTag: tag,
               name: rowData.name ? String(rowData.name).trim() : `${sheetName} Asset`,
-              type: sheetName.trim(),
+              category,
+              type: getDefaultAssetType(category),
               model: rowData.model ? String(rowData.model).trim() : 'Generic',
               serialNumber: serial,
               classification: 'INTERNAL',
-              status: rowData.status && String(rowData.status).toUpperCase().includes('OK') ? 'ALLOCATED' : 'PROCURED',
+              status: normalizeAssetStatus(rowData.status),
               location: rowData.location ? String(rowData.location).trim() : 'HQ Delhi',
               ownerId: employeeUser.id,
               acceptableUseSigned: true,
               signOffDate: new Date(),
               lastVerifiedDate: new Date(),
-              nextVerificationDue: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+              nextVerificationDue: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+              sourceSheet: sheetName.trim()
             }
           });
         }

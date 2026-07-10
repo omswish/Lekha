@@ -3,6 +3,7 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const { parseAndSeedExcel } = require('./excel_parser');
+const { migrate } = require('./migrate_assets');
 
 // Initialize Prisma Client to connect with PostgreSQL database.
 const prisma = new PrismaClient();
@@ -112,47 +113,6 @@ async function main() {
   });
 
   console.log('Users seeded.');
-
-
-
-  // 4. Create standard UAIL assets (PRO 06)
-  const laptopAsset = await prisma.asset.create({
-    data: {
-      assetTag: 'UAIL/IT/LT/0001',
-      name: 'ThinkPad T14 Gen 4',
-      type: 'Laptop',
-      model: 'Lenovo ThinkPad T14',
-      serialNumber: 'L3N123456789X',
-      classification: 'INTERNAL',
-      status: 'ALLOCATED',
-      location: 'HQ Delhi - Floor 3',
-      ownerId: employee.id,
-      acceptableUseSigned: true,
-      signOffDate: new Date(),
-      lastVerifiedDate: new Date(),
-      nextVerificationDue: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
-    },
-  });
-
-  const serverAsset = await prisma.asset.create({
-    data: {
-      assetTag: 'UAIL/IT/SE/0002',
-      name: 'Core Database Server',
-      type: 'Server',
-      model: 'Dell PowerEdge R760',
-      serialNumber: 'SV-DELL-998877',
-      classification: 'CONFIDENTIAL',
-      status: 'MAINTENANCE',
-      location: 'Mumbai Data Center - Rack 12-A',
-      ownerId: admin.id,
-      acceptableUseSigned: true,
-      signOffDate: new Date(),
-      lastVerifiedDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30),
-      nextVerificationDue: new Date(Date.now() + 1000 * 60 * 60 * 24 * 335),
-    },
-  });
-
-  console.log('IT Assets registered.');
 
   // 5. Seed Controlled Documents (FMT 01 / FMT 02)
   await prisma.controlledDocument.createMany({
@@ -756,6 +716,7 @@ async function main() {
 
   // Run dynamic excel worksheets parser engine to populate actual files data
   await parseAndSeedExcel(prisma, admin, employee, manager);
+  await migrate();
 
   // 23. Initialize CERT-In audit log entry
   await prisma.auditLog.create({

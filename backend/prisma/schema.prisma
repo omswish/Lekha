@@ -33,89 +33,119 @@ enum AssetStatus {
   LOST
 }
 
+enum AssetCategory {
+  LAPTOP
+  DESKTOP
+  PRINTER
+  MTR
+  KIOSK
+  SERVER
+  STORAGE
+  TAPE_LIBRARY
+  SWITCH
+  ROUTER
+  FIREWALL
+  UPS
+  ACCESS_POINT
+  VC_UNIT
+  DATA_CARD
+  PROJECTOR
+  CONSUMABLE
+  OTHER
+}
+
 // ==========================================
 // CORE IDENTITY & INVENTORY MODELS
 // ==========================================
 
 model User {
-  id                  String           @id @default(uuid())
-  email               String           @unique
-  name                String
-  passwordHash        String
-  role                Role             @default(EMPLOYEE)
-  department          String
-  
+  id           String @id @default(uuid())
+  email        String @unique
+  name         String
+  passwordHash String
+  role         Role   @default(EMPLOYEE)
+  department   String
+
   // DPDP Consent Flags
-  hasConsented        Boolean          @default(false)
-  consentTimestamp    DateTime?
-  consentPurpose      String?
-  isAnonymized        Boolean          @default(false)
-  
-  assets              Asset[]          @relation("AssetOwner")
-  auditLogs           AuditLog[]
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
+  hasConsented     Boolean   @default(false)
+  consentTimestamp DateTime?
+  consentPurpose   String?
+  isAnonymized     Boolean   @default(false)
+
+  assets    Asset[]    @relation("AssetOwner")
+  auditLogs AuditLog[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 }
 
 model Asset {
-  id                  String              @id @default(uuid())
-  assetTag            String              @unique // Format: UAIL/IT/[LT|SE|FW|etc]/nnnn
-  name                String
-  type                String              // LT, DT, PR, SE, ST, TL, SW, RT, FW
-  model               String
-  serialNumber        String              @unique
-  classification      AssetClassification @default(INTERNAL)
-  status              AssetStatus         @default(PROCURED)
-  location            String
-  
+  id             String              @id @default(uuid())
+  assetTag       String              @unique // Format: UAIL/IT/[LT|SE|FW|etc]/nnnn
+  name           String
+  category       AssetCategory       @default(OTHER)
+  type           String // Subtype or legacy label (e.g. LOCAL PRINTER, MEDIUM, Laptop)
+  model          String
+  serialNumber   String              @unique
+  classification AssetClassification @default(INTERNAL)
+  status         AssetStatus         @default(PROCURED)
+  location       String
+
   ownerId             String?
-  owner               User?               @relation("AssetOwner", fields: [ownerId], references: [id])
-  acceptableUseSigned Boolean             @default(false)
+  owner               User?     @relation("AssetOwner", fields: [ownerId], references: [id])
+  acceptableUseSigned Boolean   @default(false)
   signOffDate         DateTime?
 
   // PRO 06 Annual Auditing Trackers
   lastVerifiedDate    DateTime?
   nextVerificationDue DateTime?
 
-  history             AssetHistory[]
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  // Extra attributes & data migration parameters
+  sourceSheet  String?
+  customFields Json?
+  isIncomplete Boolean @default(false)
+
+  history   AssetHistory[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([category])
+  @@index([sourceSheet])
 }
 
 model AssetHistory {
   id          String   @id @default(uuid())
   assetId     String
   asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  action      String   // PROCURED, ALLOCATED, DEALLOCATED, MAINTENANCE, VERIFIED
-  performedBy String   // Operator email
+  action      String // PROCURED, ALLOCATED, DEALLOCATED, MAINTENANCE, VERIFIED
+  performedBy String // Operator email
   description String
   timestamp   DateTime @default(now())
 }
 
 // CERT-In 180-Day Immutable audit logs
 model AuditLog {
-  id          String   @id @default(uuid())
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  action      String
-  module      String
-  ipAddress   String
-  userAgent   String
-  details     String
-  status      String
-  timestamp   DateTime @default(now())
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  module    String
+  ipAddress String
+  userAgent String
+  details   String
+  status    String
+  timestamp DateTime @default(now())
 }
 
 // DPDP RoPA Register model
 model RoPARecord {
-  id                  String   @id @default(uuid())
-  dataCategory        String
-  purpose             String
-  processingActivity  String
-  sharingScope        String
-  retentionPeriod     String
-  securitySafeguards  String
-  updatedAt           DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  dataCategory       String
+  purpose            String
+  processingActivity String
+  sharingScope       String
+  retentionPeriod    String
+  securitySafeguards String
+  updatedAt          DateTime @updatedAt
 }
 
 // ==========================================
@@ -124,69 +154,69 @@ model RoPARecord {
 
 // FMT 01 / FMT 02: Master List of Controlled Documents & Records (PRO 01)
 model ControlledDocument {
-  id                  String   @id @default(uuid())
-  docCode             String   @unique // e.g. UAIL/ISMS/POL/009, UAIL/ISMS/PRO/006
-  title               String
-  type                String   // POLICY, PROCEDURE, FORMAT, MANUAL
-  version             String   // e.g. 1.0, 2.0
-  status              String   // DRAFT, APPROVED, SUPERSEDED
-  owner               String   // e.g. IT Head, Security Coordinator
-  approvedBy          String?
-  effectiveDate       DateTime
-  reviewCycleMonths   Int      @default(12)
-  nextReviewDate      DateTime
-  changeSummary       String?  // FMT 04 Document Change Note details
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                String   @id @default(uuid())
+  docCode           String   @unique // e.g. UAIL/ISMS/POL/009, UAIL/ISMS/PRO/006
+  title             String
+  type              String // POLICY, PROCEDURE, FORMAT, MANUAL
+  version           String // e.g. 1.0, 2.0
+  status            String // DRAFT, APPROVED, SUPERSEDED
+  owner             String // e.g. IT Head, Security Coordinator
+  approvedBy        String?
+  effectiveDate     DateTime
+  reviewCycleMonths Int      @default(12)
+  nextReviewDate    DateTime
+  changeSummary     String? // FMT 04 Document Change Note details
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 // Compliance checklist schedulers
 model ComplianceTask {
-  id                String              @id @default(uuid())
-  code              String              @unique // e.g. PRO-05, PRO-12, PRO-20
-  name              String
-  description       String
-  frequency         String              // DAILY, WEEKLY, MONTHLY, QUARTERLY, YEARLY
-  associatedFormat  String?             // e.g. FMT 11, FMT 50, FMT 26
-  status            String              @default("PENDING") // COMPLIANT, ACTION_REQUIRED, PENDING
-  lastChecked       DateTime?
-  nextDueDate       DateTime?
-  
-  logs              ComplianceTaskLog[]
-  nonConformances   NonConformance[]
-  createdAt         DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  id               String    @id @default(uuid())
+  code             String    @unique // e.g. PRO-05, PRO-12, PRO-20
+  name             String
+  description      String
+  frequency        String // DAILY, WEEKLY, MONTHLY, QUARTERLY, YEARLY
+  associatedFormat String? // e.g. FMT 11, FMT 50, FMT 26
+  status           String    @default("PENDING") // COMPLIANT, ACTION_REQUIRED, PENDING
+  lastChecked      DateTime?
+  nextDueDate      DateTime?
+
+  logs            ComplianceTaskLog[]
+  nonConformances NonConformance[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 }
 
 model ComplianceTaskLog {
-  id              String         @id @default(uuid())
-  taskId          String
-  task            ComplianceTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  checkedBy       String
-  status          String         // COMPLIANT, NON_CONFORMANCE
-  notes           String
-  evidenceUrl     String?
-  timestamp       DateTime       @default(now())
+  id          String         @id @default(uuid())
+  taskId      String
+  task        ComplianceTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  checkedBy   String
+  status      String // COMPLIANT, NON_CONFORMANCE
+  notes       String
+  evidenceUrl String?
+  timestamp   DateTime       @default(now())
 }
 
 // Non-Conformance Log (FMT 13 NCR / FMT 14 CAR)
 model NonConformance {
-  id                String          @id @default(uuid())
-  code              String          @unique // e.g. NC-2026-0001
-  source            String          // INTERNAL_AUDIT, RANDOM_CHECK, VENDOR_REVIEW
+  id                String    @id @default(uuid())
+  code              String    @unique // e.g. NC-2026-0001
+  source            String // INTERNAL_AUDIT, RANDOM_CHECK, VENDOR_REVIEW
   description       String
-  severity          String          // MINOR, MAJOR
-  status            String          @default("OPEN") // OPEN, UNDER_REVIEW, CLOSED
-  correctiveAction  String?         // Corrective Action Request (CAR)
+  severity          String // MINOR, MAJOR
+  status            String    @default("OPEN") // OPEN, UNDER_REVIEW, CLOSED
+  correctiveAction  String? // Corrective Action Request (CAR)
   targetClosureDate DateTime
   closedDate        DateTime?
   closedBy          String?
-  
-  taskId            String?
-  task              ComplianceTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+
+  taskId String?
+  task   ComplianceTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ==========================================
@@ -195,97 +225,97 @@ model NonConformance {
 
 // FMT 06: Risk Assessment and Treatment Record (PRO 07)
 model RiskRecord {
-  id                  String    @id @default(uuid())
-  riskCode            String    @unique // e.g. RISK-2026-0001
-  assetOrProcess      String    // e.g. Core Database, Email Server, Employee Handovers
-  threat              String    // e.g. Hardware theft, Database Injection attack, PII leak
-  vulnerability       String    // e.g. Weak passwords, lack of encryption at rest, access delay
-  impactScore         Int       // 1 to 5 rating
-  likelihoodScore     Int       // 1 to 5 rating
-  riskScore           Int       // Calculated as impact * likelihood (Max 25)
-  treatmentStrategy   String    // MITIGATE, ACCEPT, AVOID, TRANSFER
-  treatmentPlan       String    // Detail controls (e.g. Implement AES-256)
-  targetDate          DateTime
-  status              String    @default("OPEN") // OPEN, MITIGATED, UNDER_REVIEW
-  owner               String    // Responsible email
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                String   @id @default(uuid())
+  riskCode          String   @unique // e.g. RISK-2026-0001
+  assetOrProcess    String // e.g. Core Database, Email Server, Employee Handovers
+  threat            String // e.g. Hardware theft, Database Injection attack, PII leak
+  vulnerability     String // e.g. Weak passwords, lack of encryption at rest, access delay
+  impactScore       Int // 1 to 5 rating
+  likelihoodScore   Int // 1 to 5 rating
+  riskScore         Int // Calculated as impact * likelihood (Max 25)
+  treatmentStrategy String // MITIGATE, ACCEPT, AVOID, TRANSFER
+  treatmentPlan     String // Detail controls (e.g. Implement AES-256)
+  targetDate        DateTime
+  status            String   @default("OPEN") // OPEN, MITIGATED, UNDER_REVIEW
+  owner             String // Responsible email
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 // FMT 08 / FMT 32 / FMT 56: Access Request & User ID logs (PRO 21)
 model AccessRequest {
-  id                  String    @id @default(uuid())
-  requestCode         String    @unique // e.g. AR-2026-0001
-  requestedBy         String    // Employee email
-  systemName          String    // e.g. PostgreSQL, Active Directory, Server Room Access
-  accessType          String    // e.g. READ, WRITE, ADMIN
-  justification       String
-  status              String    @default("PENDING") // PENDING, APPROVED, REJECTED
-  approvedBy          String?   // Approver email
-  approvalDate        DateTime?
-  actionTaken         String?   // e.g. "USER_ID_CREATED", "PERMISSIONS_UPDATED"
-  actionDate          DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id            String    @id @default(uuid())
+  requestCode   String    @unique // e.g. AR-2026-0001
+  requestedBy   String // Employee email
+  systemName    String // e.g. PostgreSQL, Active Directory, Server Room Access
+  accessType    String // e.g. READ, WRITE, ADMIN
+  justification String
+  status        String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  approvedBy    String? // Approver email
+  approvalDate  DateTime?
+  actionTaken   String? // e.g. "USER_ID_CREATED", "PERMISSIONS_UPDATED"
+  actionDate    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 // FMT 20 / FMT 21: Security Incident & Evaluation Register (PRO 18)
 model SecurityIncident {
-  id                  String    @id @default(uuid())
-  incidentCode        String    @unique // e.g. INC-2026-0001
-  dateOccurred        DateTime
-  location            String
-  description         String
-  severity            String    // MINOR, MAJOR, CRITICAL
-  containmentAction   String    // Immediate mitigation step
-  rootCause           String?   // Evaluated cause (FMT 21)
-  correctiveAction    String?   // Long term action plan
-  status              String    @default("OPEN") // OPEN, INVESTIGATING, CLOSED
-  closedBy            String?
-  closedDate          DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                String    @id @default(uuid())
+  incidentCode      String    @unique // e.g. INC-2026-0001
+  dateOccurred      DateTime
+  location          String
+  description       String
+  severity          String // MINOR, MAJOR, CRITICAL
+  containmentAction String // Immediate mitigation step
+  rootCause         String? // Evaluated cause (FMT 21)
+  correctiveAction  String? // Long term action plan
+  status            String    @default("OPEN") // OPEN, INVESTIGATING, CLOSED
+  closedBy          String?
+  closedDate        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 // FMT 22 / FMT 23: Visitor & Server Room Access Register (PRO 11)
 model VisitorLog {
-  id                  String    @id @default(uuid())
-  visitorName         String
-  organization        String
-  purpose             String    // e.g. Hardware delivery, AC Maintenance, Vendor audit
-  areaAccessed        String    // e.g. OFFICE_FLOOR, SERVER_ROOM
-  timeIn              DateTime
-  timeOut             DateTime?
-  escortedBy          String    // Host employee email
-  badgeNumber         String?
-  createdAt           DateTime  @default(now())
+  id           String    @id @default(uuid())
+  visitorName  String
+  organization String
+  purpose      String // e.g. Hardware delivery, AC Maintenance, Vendor audit
+  areaAccessed String // e.g. OFFICE_FLOOR, SERVER_ROOM
+  timeIn       DateTime
+  timeOut      DateTime?
+  escortedBy   String // Host employee email
+  badgeNumber  String?
+  createdAt    DateTime  @default(now())
 }
 
 // FMT 34 / FMT 35 / FMT 36: Backup & Restoration Testing Register (PRO 05)
 model BackupRegister {
   id                  String    @id @default(uuid())
-  systemName          String    // e.g. Core Database, Git Repository, Access logs
+  systemName          String // e.g. Core Database, Git Repository, Access logs
   backupDate          DateTime  @default(now())
-  backupType          String    // FULL, DIFFERENTIAL, INCREMENTAL
-  status              String    // SUCCESS, FAILED
+  backupType          String // FULL, DIFFERENTIAL, INCREMENTAL
+  status              String // SUCCESS, FAILED
   performedBy         String
-  storageLocation     String    // e.g. Local NAS Backup Partition, Offsite Vault
+  storageLocation     String // e.g. Local NAS Backup Partition, Offsite Vault
   restorationTested   Boolean   @default(false)
   restorationTestDate DateTime?
-  restorationStatus   String?   // SUCCESS, FAILED
-  restorationNotes    String?   // Remarks during recovery tests
+  restorationStatus   String? // SUCCESS, FAILED
+  restorationNotes    String? // Remarks during recovery tests
 }
 
 // FMT 26: Patch Status Audit Report (PRO 20)
 model PatchAuditLog {
-  id                  String    @id @default(uuid())
-  serverName          String    // e.g. Core DB Server, Web Edge Server
-  auditDate           DateTime  @default(now())
-  patchId             String    // e.g. KB5008212, CVE-2026-0021-Patch
-  criticality         String    // CRITICAL, HIGH, MEDIUM, LOW
-  status              String    // INSTALLED, PENDING, REJECTED
-  checkedBy           String
-  remediationPlan     String?   // If pending/rejected, next steps
+  id              String   @id @default(uuid())
+  serverName      String // e.g. Core DB Server, Web Edge Server
+  auditDate       DateTime @default(now())
+  patchId         String // e.g. KB5008212, CVE-2026-0021-Patch
+  criticality     String // CRITICAL, HIGH, MEDIUM, LOW
+  status          String // INSTALLED, PENDING, REJECTED
+  checkedBy       String
+  remediationPlan String? // If pending/rejected, next steps
 }
 
 // ==========================================
@@ -293,34 +323,34 @@ model PatchAuditLog {
 // ==========================================
 
 model ChangeRequest {
-  id                  String             @id @default(uuid())
-  changeCode          String             @unique // e.g. CR-2026-0001
-  title               String
-  systemName          String             // e.g. Production ERP database
-  description         String
-  reason              String
-  impactAnalysis      String             // High, Medium, Low impact detail
-  rollbackPlan        String
-  status              String             @default("PENDING") // PENDING, TESTING, APPROVED, IMPLEMENTED, REJECTED
-  requestedBy         String             // Requester email
-  targetDate          DateTime
-  approvedBy          String?            // CAB Approver email
-  approvalDate        DateTime?
-  
-  testRecords         ChangeTestRecord[]
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
+  id             String    @id @default(uuid())
+  changeCode     String    @unique // e.g. CR-2026-0001
+  title          String
+  systemName     String // e.g. Production ERP database
+  description    String
+  reason         String
+  impactAnalysis String // High, Medium, Low impact detail
+  rollbackPlan   String
+  status         String    @default("PENDING") // PENDING, TESTING, APPROVED, IMPLEMENTED, REJECTED
+  requestedBy    String // Requester email
+  targetDate     DateTime
+  approvedBy     String? // CAB Approver email
+  approvalDate   DateTime?
+
+  testRecords ChangeTestRecord[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 }
 
 model ChangeTestRecord {
-  id                  String        @id @default(uuid())
-  changeRequestId     String
-  changeRequest       ChangeRequest @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
-  testPlan            String        // Details of validation checklist (FMT 28)
-  testCases           String
-  testResult          String        // SUCCESS, FAILED
-  testedBy            String        // QA tester email
-  testDate            DateTime      @default(now())
+  id              String        @id @default(uuid())
+  changeRequestId String
+  changeRequest   ChangeRequest @relation(fields: [changeRequestId], references: [id], onDelete: Cascade)
+  testPlan        String // Details of validation checklist (FMT 28)
+  testCases       String
+  testResult      String // SUCCESS, FAILED
+  testedBy        String // QA tester email
+  testDate        DateTime      @default(now())
 }
 
 // ==========================================
@@ -328,35 +358,35 @@ model ChangeTestRecord {
 // ==========================================
 
 model TrainingSession {
-  id                  String               @id @default(uuid())
-  topic               String               // e.g. "ISO 27001 ISMS Awareness Session"
-  trainer             String               // e.g. "Security Coordinator"
-  scheduledDate       DateTime
-  durationHours       Float
-  status              String               @default("PLANNED") // PLANNED, COMPLETED, CANCELLED
-  
-  attendanceList      TrainingAttendance[]
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  id            String   @id @default(uuid())
+  topic         String // e.g. "ISO 27001 ISMS Awareness Session"
+  trainer       String // e.g. "Security Coordinator"
+  scheduledDate DateTime
+  durationHours Float
+  status        String   @default("PLANNED") // PLANNED, COMPLETED, CANCELLED
+
+  attendanceList TrainingAttendance[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 }
 
 model TrainingAttendance {
-  id                  String          @id @default(uuid())
-  sessionId           String
-  session             TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  employeeEmail       String          // Linked to participant email
-  attended            Boolean         @default(false)
-  
+  id            String          @id @default(uuid())
+  sessionId     String
+  session       TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  employeeEmail String // Linked to participant email
+  attended      Boolean         @default(false)
+
   // FMT 18: Feedback Form
-  feedbackRating      Int?            // Rating scale 1 to 5
-  feedbackNotes       String?
-  
+  feedbackRating Int? // Rating scale 1 to 5
+  feedbackNotes  String?
+
   // FMT 19: Evaluation Checklist
-  evaluationScore     Float?          // Score percentage (e.g. 85.5)
-  evaluationStatus    String          @default("AWAITING") // PASS, FAIL, AWAITING
-  
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  evaluationScore  Float? // Score percentage (e.g. 85.5)
+  evaluationStatus String @default("AWAITING") // PASS, FAIL, AWAITING
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ==========================================
@@ -364,33 +394,33 @@ model TrainingAttendance {
 // ==========================================
 
 model BcpSchedule {
-  id                  String          @id @default(uuid())
-  bcpCode             String          @unique // e.g. BCP-2026-0001
-  systemName          String          // e.g. Active Directory Master
-  scenario            String          // e.g. Primary WAN connectivity cutoff
-  scheduledDate       DateTime
-  rto                 String          // e.g. "2 Hours"
-  rpo                 String          // e.g. "12 Hours"
-  coordinator         String          // e.g. "IT Operations Lead"
-  status              String          @default("PLANNED") // PLANNED, TESTING, COMPLETED, CANCELLED
-  
-  testRecords         BcpTestRecord[]
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  id            String   @id @default(uuid())
+  bcpCode       String   @unique // e.g. BCP-2026-0001
+  systemName    String // e.g. Active Directory Master
+  scenario      String // e.g. Primary WAN connectivity cutoff
+  scheduledDate DateTime
+  rto           String // e.g. "2 Hours"
+  rpo           String // e.g. "12 Hours"
+  coordinator   String // e.g. "IT Operations Lead"
+  status        String   @default("PLANNED") // PLANNED, TESTING, COMPLETED, CANCELLED
+
+  testRecords BcpTestRecord[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 }
 
 model BcpTestRecord {
-  id                  String      @id @default(uuid())
-  bcpScheduleId       String
-  bcpSchedule         BcpSchedule @relation(fields: [bcpScheduleId], references: [id], onDelete: Cascade)
-  testDate            DateTime    @default(now())
-  actualRtoMinutes    Int
-  dataLossObserved    String      // e.g. "No data loss observed. Mirror DB synced."
-  successCriteriaMet  Boolean     @default(true)
-  testResult          String      // SUCCESS, FAILED
-  participants        String      // Comma-separated participant names/emails
-  notes               String      // Lessons learned, gaps observed
-  testedBy            String      // Tester auditor email
+  id                 String      @id @default(uuid())
+  bcpScheduleId      String
+  bcpSchedule        BcpSchedule @relation(fields: [bcpScheduleId], references: [id], onDelete: Cascade)
+  testDate           DateTime    @default(now())
+  actualRtoMinutes   Int
+  dataLossObserved   String // e.g. "No data loss observed. Mirror DB synced."
+  successCriteriaMet Boolean     @default(true)
+  testResult         String // SUCCESS, FAILED
+  participants       String // Comma-separated participant names/emails
+  notes              String // Lessons learned, gaps observed
+  testedBy           String // Tester auditor email
 }
 
 // ==========================================
@@ -398,29 +428,29 @@ model BcpTestRecord {
 // ==========================================
 
 model SupplierRecord {
-  id                  String                     @id @default(uuid())
-  supplierName        String
-  serviceProvided     String                     // e.g. Offsite cloud hosting, firewall maintenance
-  contactPerson       String
-  contactEmail        String
-  status              String                     @default("ACTIVE") // ACTIVE, UNDER_REVIEW, BLACKLISTED
-  
-  reviews             SupplierPerformanceReview[]
-  createdAt           DateTime                   @default(now())
-  updatedAt           DateTime                   @updatedAt
+  id              String @id @default(uuid())
+  supplierName    String
+  serviceProvided String // e.g. Offsite cloud hosting, firewall maintenance
+  contactPerson   String
+  contactEmail    String
+  status          String @default("ACTIVE") // ACTIVE, UNDER_REVIEW, BLACKLISTED
+
+  reviews   SupplierPerformanceReview[]
+  createdAt DateTime                    @default(now())
+  updatedAt DateTime                    @updatedAt
 }
 
 model SupplierPerformanceReview {
-  id                  String         @id @default(uuid())
-  supplierId          String
-  supplier            SupplierRecord @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  reviewDate          DateTime       @default(now())
-  qualityRating       Int            // 1 to 5 scale
-  deliveryRating      Int            // 1 to 5 scale
-  securityRating      Int            // 1 to 5 scale
-  overallScore        Float          // Calculated average score
-  remarks             String         // Service performance remarks (FMT 24)
-  reviewedBy          String         // Assessor email
+  id             String         @id @default(uuid())
+  supplierId     String
+  supplier       SupplierRecord @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  reviewDate     DateTime       @default(now())
+  qualityRating  Int // 1 to 5 scale
+  deliveryRating Int // 1 to 5 scale
+  securityRating Int // 1 to 5 scale
+  overallScore   Float // Calculated average score
+  remarks        String // Service performance remarks (FMT 24)
+  reviewedBy     String // Assessor email
 }
 
 // ==========================================
@@ -428,29 +458,29 @@ model SupplierPerformanceReview {
 // ==========================================
 
 model AuditPlan {
-  id                  String         @id @default(uuid())
-  auditCode           String         @unique // e.g. AUDIT-2026-0001
-  department          String         // e.g. IT Department, Operations, HR
-  scheduledDate       DateTime
-  leadAuditor         String         // auditor email
-  auditee             String         // auditee email contact
-  scope               String         // Audit scope description (FMT 10)
-  status              String         @default("PLANNED") // PLANNED, ACTIVE, COMPLETED, CANCELLED
-  
-  findings            AuditFinding[]
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  id            String   @id @default(uuid())
+  auditCode     String   @unique // e.g. AUDIT-2026-0001
+  department    String // e.g. IT Department, Operations, HR
+  scheduledDate DateTime
+  leadAuditor   String // auditor email
+  auditee       String // auditee email contact
+  scope         String // Audit scope description (FMT 10)
+  status        String   @default("PLANNED") // PLANNED, ACTIVE, COMPLETED, CANCELLED
+
+  findings  AuditFinding[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 }
 
 model AuditFinding {
-  id                  String    @id @default(uuid())
-  auditPlanId         String
-  auditPlan           AuditPlan @relation(fields: [auditPlanId], references: [id], onDelete: Cascade)
-  checklistQuestion   String    // Audit point checked (FMT 11 checklist)
-  evidenceObserved    String    // Auditing findings observed (FMT 54 report)
-  complianceStatus    String    // COMPLIANT, CONCERN, NON_CONFORMANCE
-  ncrCode             String?   // Linked NonConformance code if any
-  testedBy            String    // auditor email
+  id                String    @id @default(uuid())
+  auditPlanId       String
+  auditPlan         AuditPlan @relation(fields: [auditPlanId], references: [id], onDelete: Cascade)
+  checklistQuestion String // Audit point checked (FMT 11 checklist)
+  evidenceObserved  String // Auditing findings observed (FMT 54 report)
+  complianceStatus  String // COMPLIANT, CONCERN, NON_CONFORMANCE
+  ncrCode           String? // Linked NonConformance code if any
+  testedBy          String // auditor email
 }
 
 // ==========================================
@@ -458,18 +488,18 @@ model AuditFinding {
 // ==========================================
 
 model MediaDisposalRecord {
-  id                  String              @id @default(uuid())
-  disposalCode        String              @unique // e.g. MEDIA-2026-0001
-  mediaType           String              // e.g. SSD, Hard Drive, Backup Tape, CD-ROM
-  serialNumber        String
-  assetTag            String?             // Optional link to IT Asset Tag
-  classification      AssetClassification @default(CONFIDENTIAL)
-  requestedBy         String              // Employee email
-  approvedBy          String?             // Manager/Admin approver email
-  destructionMethod   String              // e.g. Physical Shredding, Degaussing
-  witnessName         String              // Witness operator name
-  disposalDate        DateTime            @default(now())
-  status              String              @default("PENDING_APPROVAL") // PENDING_APPROVAL, DESTROYED, REJECTED
+  id                String              @id @default(uuid())
+  disposalCode      String              @unique // e.g. MEDIA-2026-0001
+  mediaType         String // e.g. SSD, Hard Drive, Backup Tape, CD-ROM
+  serialNumber      String
+  assetTag          String? // Optional link to IT Asset Tag
+  classification    AssetClassification @default(CONFIDENTIAL)
+  requestedBy       String // Employee email
+  approvedBy        String? // Manager/Admin approver email
+  destructionMethod String // e.g. Physical Shredding, Degaussing
+  witnessName       String // Witness operator name
+  disposalDate      DateTime            @default(now())
+  status            String              @default("PENDING_APPROVAL") // PENDING_APPROVAL, DESTROYED, REJECTED
 }
 
 // ==========================================
@@ -477,22 +507,22 @@ model MediaDisposalRecord {
 // ==========================================
 
 model PasswordChangeTrack {
-  id                  String   @id @default(uuid())
-  employeeEmail       String
-  changedDate         DateTime @default(now())
-  reason              String   // e.g. "90-Day Rotation Policy", "Ad-Hoc Security Reset"
+  id            String   @id @default(uuid())
+  employeeEmail String
+  changedDate   DateTime @default(now())
+  reason        String // e.g. "90-Day Rotation Policy", "Ad-Hoc Security Reset"
 }
 
 model UserIdRevalidationReport {
-  id                  String   @id @default(uuid())
-  revalidationCode    String   @unique // e.g. REV-2026-0001
-  reviewDate          DateTime @default(now())
-  systemName          String   // e.g. Active Directory Services
-  employeeEmail       String
-  currentAccessLevel  String   // e.g. Administrator, Auditor, Developer
-  revalidated         Boolean  @default(true)
-  revalidatedBy       String   // Auditor email
-  actionTaken         String   // e.g. Retained, Downgraded, Access Revoked
+  id                 String   @id @default(uuid())
+  revalidationCode   String   @unique // e.g. REV-2026-0001
+  reviewDate         DateTime @default(now())
+  systemName         String // e.g. Active Directory Services
+  employeeEmail      String
+  currentAccessLevel String // e.g. Administrator, Auditor, Developer
+  revalidated        Boolean  @default(true)
+  revalidatedBy      String // Auditor email
+  actionTaken        String // e.g. Retained, Downgraded, Access Revoked
 }
 
 // ==========================================
@@ -500,16 +530,16 @@ model UserIdRevalidationReport {
 // ==========================================
 
 model LogReviewRecord {
-  id                  String   @id @default(uuid())
-  reviewCode          String   @unique // e.g. LOG-2026-0001
-  systemName          String   // e.g. AD Server, Main ERP DB
-  logSource           String   // e.g. Security Event Logs, syslog secure
-  reviewDate          DateTime @default(now())
-  reviewedBy          String   // Auditor email
-  deviationsObserved  Boolean  @default(false)
-  deviationDetails    String?  // Gaps description (FMT 50)
-  actionTaken         String?  // Corrective action details (FMT 50)
-  status              String   @default("COMPLIANT") // COMPLIANT, ACTION_REQUIRED
+  id                 String   @id @default(uuid())
+  reviewCode         String   @unique // e.g. LOG-2026-0001
+  systemName         String // e.g. AD Server, Main ERP DB
+  logSource          String // e.g. Security Event Logs, syslog secure
+  reviewDate         DateTime @default(now())
+  reviewedBy         String // Auditor email
+  deviationsObserved Boolean  @default(false)
+  deviationDetails   String? // Gaps description (FMT 50)
+  actionTaken        String? // Corrective action details (FMT 50)
+  status             String   @default("COMPLIANT") // COMPLIANT, ACTION_REQUIRED
 }
 
 // ==========================================
@@ -517,66 +547,66 @@ model LogReviewRecord {
 // ==========================================
 
 model ManagementReview {
-  id                  String   @id @default(uuid())
-  meetingCode         String   @unique // e.g. MRM-2026-0001
-  meetingDate         DateTime @default(now())
-  attendees           String
-  agenda              String
-  discussionPoints    String
-  actionItems         String
+  id               String   @id @default(uuid())
+  meetingCode      String   @unique // e.g. MRM-2026-0001
+  meetingDate      DateTime @default(now())
+  attendees        String
+  agenda           String
+  discussionPoints String
+  actionItems      String
 }
 
 model LicenseRecord {
-  id                  String   @id @default(uuid())
-  softwareName        String
-  licenseKey          String
-  totalLicenses       Int
-  allocatedLicenses   Int
-  expiryDate          DateTime
-  owner               String
+  id                String   @id @default(uuid())
+  softwareName      String
+  licenseKey        String
+  totalLicenses     Int
+  allocatedLicenses Int
+  expiryDate        DateTime
+  owner             String
 }
 
 model AccessControlMatrix {
-  id                  String   @id @default(uuid())
-  roleName            String
-  systemName          String
-  readAccess          Boolean  @default(false)
-  writeAccess         Boolean  @default(false)
-  adminAccess         Boolean  @default(false)
+  id          String  @id @default(uuid())
+  roleName    String
+  systemName  String
+  readAccess  Boolean @default(false)
+  writeAccess Boolean @default(false)
+  adminAccess Boolean @default(false)
 }
 
 model ServerRoomActivity {
-  id                  String   @id @default(uuid())
-  activityCode        String   @unique // e.g. SRA-2026-0001
-  activityDate        DateTime @default(now())
-  activityType        String
-  performedBy         String
-  witnessName         String
-  remarks             String
+  id           String   @id @default(uuid())
+  activityCode String   @unique // e.g. SRA-2026-0001
+  activityDate DateTime @default(now())
+  activityType String
+  performedBy  String
+  witnessName  String
+  remarks      String
 }
 
 model ExternalOriginDocument {
-  id                  String   @id @default(uuid())
-  documentTitle       String
-  origin              String
-  receivedDate        DateTime @default(now())
-  version             String
+  id            String   @id @default(uuid())
+  documentTitle String
+  origin        String
+  receivedDate  DateTime @default(now())
+  version       String
 }
 
 model AmendmentRecord {
-  id                  String   @id @default(uuid())
-  formatCode          String
-  amendmentDetails    String
-  dateOfAmendment     DateTime @default(now())
-  approvedBy          String
+  id               String   @id @default(uuid())
+  formatCode       String
+  amendmentDetails String
+  dateOfAmendment  DateTime @default(now())
+  approvedBy       String
 }
 
 model LegislationRecord {
-  id                  String   @id @default(uuid())
-  actName             String
-  applicableClause    String
+  id                    String @id @default(uuid())
+  actName               String
+  applicableClause      String
   complianceRequirement String
-  status              String   @default("COMPLIANT")
+  status                String @default("COMPLIANT")
 }
 
 model ControlEffectiveness {
@@ -590,26 +620,26 @@ model ControlEffectiveness {
 }
 
 model SoftwareEvaluation {
-  id                  String   @id @default(uuid())
-  softwareName        String
-  securityChecklist   String
-  evaluationResult    String   @default("APPROVED") // APPROVED, REJECTED
-  evaluatedBy         String
+  id                String @id @default(uuid())
+  softwareName      String
+  securityChecklist String
+  evaluationResult  String @default("APPROVED") // APPROVED, REJECTED
+  evaluatedBy       String
 }
 
 model CommunicationMatrix {
-  id                  String   @id @default(uuid())
-  stakeholder         String
-  informationShared   String
-  channel             String
-  frequency           String
+  id                String @id @default(uuid())
+  stakeholder       String
+  informationShared String
+  channel           String
+  frequency         String
 }
 
 model IsmsMetrics {
-  id                  String   @id @default(uuid())
-  objective           String
-  metricName          String
-  targetValue         String
-  actualValue         String
-  frequency           String
+  id          String @id @default(uuid())
+  objective   String
+  metricName  String
+  targetValue String
+  actualValue String
+  frequency   String
 }
