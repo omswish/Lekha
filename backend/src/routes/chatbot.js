@@ -81,9 +81,66 @@ router.post('/message', authenticate, async (req, res) => {
             ...assetBySerial,
             owner: assetBySerial.owner ? `${assetBySerial.owner.name} (${assetBySerial.owner.department})` : 'Stock'
           });
-          return res.json({ reply, data });
         }
       }
+    }
+
+    // -----------------------------------------------------------------
+    // 2A. ASSET DETAILS FOR SPECIFIC USER NAME / EMAIL
+    // -----------------------------------------------------------------
+    const detailsMatch = query.match(/(?:details\s+for|assets\s+of|allocated\s+to|assigned\s+to)\s+([a-z0-9\.\-_@\s]+)/i);
+    if (detailsMatch) {
+      const userSearch = detailsMatch[1].trim();
+      const matchedUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { name: { contains: userSearch, mode: 'insensitive' } },
+            { email: { contains: userSearch, mode: 'insensitive' } }
+          ]
+        }
+      });
+
+      if (matchedUser) {
+        const userAssets = await prisma.asset.findMany({
+          where: { ownerId: matchedUser.id },
+          select: { assetTag: true, name: true, model: true, status: true, location: true }
+        });
+
+        if (userAssets.length > 0) {
+          reply = `Found **${userAssets.length}** asset(s) allocated to user **${matchedUser.name}** (${matchedUser.email}):`;
+          data = userAssets;
+        } else {
+          reply = `User **${matchedUser.name}** (${matchedUser.email}) exists in the registry, but has no physical assets allocated currently.`;
+        }
+        return res.json({ reply, data });
+      } else {
+        reply = `I could not find any registered user matching **"${userSearch}"** in the database.`;
+        return res.json({ reply });
+      }
+    }
+
+    // -----------------------------------------------------------------
+    // 2B. STATUS OF ALLOCATION BREAKDOWN
+    // -----------------------------------------------------------------
+    if (query.includes('status of allocation') || query.includes('allocation status') || query.includes('status of asset') || query.includes('asset status')) {
+      const [total, allocated, procured, maintenance, disposed, lost] = await Promise.all([
+        prisma.asset.count(),
+        prisma.asset.count({ where: { status: 'ALLOCATED' } }),
+        prisma.asset.count({ where: { status: 'PROCURED' } }),
+        prisma.asset.count({ where: { status: 'MAINTENANCE' } }),
+        prisma.asset.count({ where: { status: 'DISPOSED' } }),
+        prisma.asset.count({ where: { status: 'LOST' } })
+      ]);
+
+      reply = `Here is the current breakdown of asset allocations in the database registry:\n\n` +
+              `• **Allocated (In Use)**: ${allocated} units\n` +
+              `• **Procured (In Stock)**: ${procured} units\n` +
+              `• **Under Maintenance**: ${maintenance} units\n` +
+              `• **Disposed / Scrap**: ${disposed} units\n` +
+              `• **Lost / Stolen**: ${lost} units\n\n` +
+              `Total Registered Units: **${total}**`;
+      
+      return res.json({ reply });
     }
 
     // -----------------------------------------------------------------
